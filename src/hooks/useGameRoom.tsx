@@ -7,7 +7,12 @@ import type {
   ServerMessage,
 } from '#/server/GameRoom'
 
-export type RoomStatus = 'connecting' | 'waiting' | 'playing' | 'closed'
+export type RoomStatus =
+  'connecting' | 'waiting' | 'paired' | 'playing' | 'closed'
+
+export type ReadyState = { self: boolean; opponent: boolean }
+
+const NOT_READY: ReadyState = { self: false, opponent: false }
 
 type UseGameRoomOptions = {
   roomId: string | undefined
@@ -32,6 +37,9 @@ export const useGameRoom = ({
   const clockOffset = useRef(0)
   const [status, setStatus] = useState<RoomStatus>('connecting')
   const [player, setPlayer] = useState<Player | null>(null)
+  const [ready, setReady] = useState<ReadyState>(NOT_READY)
+  // Whether this player serves when the next round starts
+  const [serving, setServing] = useState(false)
 
   useEffect(() => {
     onOpponentBatRef.current = onOpponentBat
@@ -49,9 +57,11 @@ export const useGameRoom = ({
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
     setStatus('connecting')
+    setReady(NOT_READY)
 
     let ws: WebSocket
     let samples: ClockSample[] = []
+    let self: Player | null = null
 
     const ping = () => {
       if (ws.readyState !== WebSocket.OPEN) return
@@ -82,8 +92,12 @@ export const useGameRoom = ({
           if (samples.length === 0) {
             clockOffset.current = message.time - performance.now()
           }
+          self = message.player
           setPlayer(message.player)
           setStatus('waiting')
+          setReady(NOT_READY)
+          // The host serves first in every new game
+          setServing(message.player === 0)
           break
         case 'pong': {
           // The lowest round trip gives the most accurate estimate
@@ -98,10 +112,22 @@ export const useGameRoom = ({
           break
         }
         case 'opponent':
-          setStatus(message.connected ? 'playing' : 'waiting')
+          setStatus(message.connected ? 'paired' : 'waiting')
+          setReady(NOT_READY)
+          setServing(self === 0)
           if (!message.connected) {
             onOpponentBatRef.current({ offset: 0, direction: 0, t: now() })
           }
+          break
+        case 'ready':
+          setReady({ self: message.self, opponent: message.opponent })
+          if (message.self && message.opponent) setStatus('playing')
+          break
+        case 'reset':
+          setStatus('paired')
+          setReady(NOT_READY)
+          setServing(message.serve)
+          onOpponentBatRef.current({ offset: 0, direction: 0, t: now() })
           break
         case 'bat': {
           const { type: _, ...bat } = message
@@ -117,7 +143,8 @@ export const useGameRoom = ({
           // The lobby picked a room between both players; its clock is resampled
           const lobby = ws
           samples = []
-          connect(`/ws/${roomId}/${message.hint}`)
+          const query = self === null ? '' : `?player=${self}`
+          connect(`/ws/${roomId}/${message.hint}${query}`)
           lobby.close()
           break
         }
@@ -150,5 +177,19 @@ export const useGameRoom = ({
     [send],
   )
 
-  return { status, player, now, sendBat, sendBall }
+  const sendReady = useCallback(() => send({ type: 'ready' }), [send])
+
+  const sendMiss = useCallback(() => send({ type: 'miss' }), [send])
+
+  return {
+    status,
+    player,
+    ready,
+    serving,
+    now,
+    sendBat,
+    sendBall,
+    sendReady,
+    sendMiss,
+  }
 }

@@ -20,7 +20,7 @@ type UseBallMovementOptions = {
   // Current trajectory, shared with the opponent's updates
   ballState: RefObject<LocalBallState | null>
   active: boolean
-  // Whether this player serves when the game starts
+  // Whether this player serves when the round starts
   serveFirst: boolean
   // Current time on the shared clock, in milliseconds
   now: () => number
@@ -28,6 +28,8 @@ type UseBallMovementOptions = {
   speed?: number
   // Called when this player hits the ball or serves
   onEvent?: (ball: BallState) => void
+  // Called once when the ball gets past this player's bat, ending the round
+  onMiss?: () => void
 }
 
 const MAX_BOUNCE_ANGLE = Math.PI / 3
@@ -137,12 +139,18 @@ export const useBallMovement = ({
   now,
   speed = 0.6,
   onEvent,
+  onMiss,
 }: UseBallMovementOptions) => {
   const onEventRef = useRef(onEvent)
+  const onMissRef = useRef(onMiss)
 
   useEffect(() => {
     onEventRef.current = onEvent
   }, [onEvent])
+
+  useEffect(() => {
+    onMissRef.current = onMiss
+  }, [onMiss])
 
   useEffect(() => {
     const ball = ballRef.current
@@ -166,6 +174,7 @@ export const useBallMovement = ({
     let previous: BallPosition = { x: 0, y: 0 }
     let displayed: BallPosition = { x: 0, y: 0 }
     let error: BallPosition = { x: 0, y: 0 }
+    let missed = false
 
     function tick(time: number) {
       frame = requestAnimationFrame(tick)
@@ -214,7 +223,10 @@ export const useBallMovement = ({
           t,
         })
       } else if (state.dy > 0 && position.y > 0.5 + ry) {
-        emit(serve(state.seq + 1, t + SERVE_DELAY))
+        if (!missed) {
+          missed = true
+          onMissRef.current?.()
+        }
       } else if (
         topBat &&
         state.dy < 0 &&

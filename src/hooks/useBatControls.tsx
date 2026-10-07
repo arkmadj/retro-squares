@@ -10,6 +10,8 @@ type UseBatControlsOptions = {
   speed?: number
   // Called when the bat starts, stops or changes direction
   onChange?: (bat: Omit<BatState, 't'>) => void
+  // When false, the bat is held at the centre and ignores input
+  enabled?: boolean
 }
 
 type UseRemoteBatOptions = {
@@ -42,6 +44,7 @@ export const useBatControls = ({
   rightKeys = DEFAULT_RIGHT_KEYS,
   speed = 1,
   onChange,
+  enabled = true,
 }: UseBatControlsOptions) => {
   const pressed = useRef({ left: false, right: false })
   // Offset from the centre of the game screen, as a fraction of its width
@@ -50,10 +53,26 @@ export const useBatControls = ({
   const frame = useRef<number | null>(null)
   const lastTime = useRef<number | null>(null)
   const onChangeRef = useRef(onChange)
+  const enabledRef = useRef(enabled)
 
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
+
+  useEffect(() => {
+    enabledRef.current = enabled
+    if (enabled) return
+
+    if (frame.current !== null) {
+      cancelAnimationFrame(frame.current)
+      frame.current = null
+    }
+    pressed.current = { left: false, right: false }
+    direction.current = 0
+    offset.current = 0
+    lastTime.current = null
+    if (batRef.current) setBatOffset(batRef.current, 0)
+  }, [enabled, batRef])
 
   const getDirection = (): Direction =>
     ((pressed.current.right ? 1 : 0) -
@@ -94,6 +113,7 @@ export const useBatControls = ({
   )
 
   const updateDirection = useCallback(() => {
+    if (!enabledRef.current) return
     const next = getDirection()
     if (next === direction.current) return
 

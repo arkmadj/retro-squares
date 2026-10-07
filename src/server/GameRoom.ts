@@ -21,6 +21,8 @@ export type ClientMessage =
   | { type: 'ping'; t: number }
   | ({ type: 'bat' } & BatState)
   | ({ type: 'ball' } & BallState)
+  | { type: 'ready' }
+  | { type: 'miss' }
 
 type Location = { latitude: number; longitude: number }
 
@@ -50,8 +52,15 @@ export type ServerMessage =
   | { type: 'relocate'; hint: RoomHint }
   | ({ type: 'bat' } & BatState)
   | ({ type: 'ball' } & BallState)
+  | { type: 'ready'; self: boolean; opponent: boolean }
+  | { type: 'reset'; serve: boolean }
 
-type Attachment = { player: Player; bat: BatState; location?: Location }
+type Attachment = {
+  player: Player
+  bat: BatState
+  ready: boolean
+  location?: Location
+}
 
 const MAX_OFFSET = 0.5
 const MAX_BALL_POSITION = 1
@@ -111,7 +120,10 @@ export class GameRoom extends DurableObject<Env> {
     const taken = this.ctx
       .getWebSockets()
       .map((ws) => this.attachment(ws).player)
-    const player = ([0, 1] as const).find((p) => !taken.includes(p))
+    // Players keep their lobby number in the relocated room, so the host stays player 0
+    const requested = Number(new URL(request.url).searchParams.get('player'))
+    const order: Player[] = requested === 1 ? [1, 0] : [0, 1]
+    const player = order.find((p) => !taken.includes(p))
     if (player === undefined) {
       return new Response('Room full', { status: 409 })
     }
@@ -122,6 +134,7 @@ export class GameRoom extends DurableObject<Env> {
     server.serializeAttachment({
       player,
       bat: { offset: 0, direction: 0, t: Date.now() },
+      ready: false,
       location,
     } satisfies Attachment)
 
@@ -156,10 +169,14 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const opponent = this.opponentOf(ws)
+    // Bats and the ball only move while both players are ready
+    const inProgress =
+      !!opponent && this.attachment(ws).ready && this.attachment(opponent).ready
 
     if (data?.type === 'ping' && isFiniteNumber(data.t)) {
       this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
     } else if (
+      inProgress &&
       data?.type === 'bat' &&
       isFiniteNumber(data.offset) &&
       isDirection(data.direction) &&
@@ -174,8 +191,9 @@ export class GameRoom extends DurableObject<Env> {
         ...this.attachment(ws),
         bat,
       } satisfies Attachment)
-      if (opponent) this.send(opponent, { type: 'bat', ...bat })
+      this.send(opponent, { type: 'bat', ...bat })
     } else if (
+      inProgress &&
       data?.type === 'ball' &&
       Number.isSafeInteger(data.seq) &&
       isFiniteNumber(data.x) &&
@@ -185,16 +203,33 @@ export class GameRoom extends DurableObject<Env> {
       isFiniteNumber(data.t)
     ) {
       // Each player reports hits and misses on their own bat
-      if (opponent) {
-        this.send(opponent, {
-          type: 'ball',
-          seq: data.seq as number,
-          x: clamp(data.x, MAX_BALL_POSITION),
-          y: clamp(data.y, MAX_BALL_POSITION),
-          dx: clamp(data.dx, 1),
-          dy: clamp(data.dy, 1),
-          t: data.t,
-        })
+      this.send(opponent, {
+        type: 'ball',
+        seq: data.seq as number,
+        x: clamp(data.x, MAX_BALL_POSITION),
+        y: clamp(data.y, MAX_BALL_POSITION),
+        dx: clamp(data.dx, 1),
+        dy: clamp(data.dy, 1),
+        t: data.t,
+      })
+    } else if (data?.type === 'ready' && opponent) {
+      ws.serializeAttachment({
+        ...this.attachment(ws),
+        ready: true,
+      } satisfies Attachment)
+      const opponentReady = this.attachment(opponent).ready
+      this.send(ws, { type: 'ready', self: true, opponent: opponentReady })
+      this.send(opponent, {
+        type: 'ready',
+        self: opponentReady,
+        opponent: true,
+      })
+    } else if (inProgress && data?.type === 'miss') {
+      // The round is over, so both players start the next one from the centre
+      // and the player who missed serves it
+      for (const player of [ws, opponent]) {
+        this.resetPlayer(player)
+        this.send(player, { type: 'reset', serve: player === ws })
       }
     }
   }
@@ -214,7 +249,18 @@ export class GameRoom extends DurableObject<Env> {
 
   private leave(ws: WebSocket) {
     const opponent = this.opponentOf(ws)
-    if (opponent) this.send(opponent, { type: 'opponent', connected: false })
+    if (!opponent) return
+    // The next opponent starts a fresh game, so both must ready up again
+    this.resetPlayer(opponent)
+    this.send(opponent, { type: 'opponent', connected: false })
+  }
+
+  private resetPlayer(ws: WebSocket) {
+    ws.serializeAttachment({
+      ...this.attachment(ws),
+      bat: { offset: 0, direction: 0, t: Date.now() },
+      ready: false,
+    } satisfies Attachment)
   }
 
   private opponentOf(ws: WebSocket) {

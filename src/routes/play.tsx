@@ -32,7 +32,8 @@ const BAT_HEIGHT = 0.5
 const STATUS_TEXT: Record<RoomStatus, string> = {
   connecting: 'Connecting…',
   waiting: 'Waiting for player 2 — share this link',
-  playing: 'Opponent connected',
+  paired: 'Opponent connected — press Ready to start',
+  playing: 'Game on',
   closed: 'Disconnected',
 }
 
@@ -67,13 +68,26 @@ function Play() {
     receiveBall(ballState, mirrorBall(ball))
   }, [])
 
-  const { status, player, now, sendBat, sendBall } = useGameRoom({
+  const {
+    status,
+    ready,
+    serving,
+    now,
+    sendBat,
+    sendBall,
+    sendReady,
+    sendMiss,
+  } = useGameRoom({
     roomId: room,
     onOpponentBat,
     onBall,
   })
 
-  useBatControls({ batRef: bottomBatRef, onChange: sendBat })
+  useBatControls({
+    batRef: bottomBatRef,
+    onChange: sendBat,
+    enabled: status === 'playing',
+  })
   useRemoteBat({ batRef: topBatRef, batState: opponentBat, now })
 
   useBallMovement({
@@ -82,14 +96,28 @@ function Play() {
     bottomBatRef,
     ballState,
     active: status === 'playing',
-    serveFirst: player === 0,
+    serveFirst: serving,
     now,
     onEvent: sendBall,
+    onMiss: sendMiss,
   })
 
   return (
     <main className="h-dvh flex flex-col items-center justify-center gap-2">
-      <p className="text-green-500 text-sm font-mono">{STATUS_TEXT[status]}</p>
+      <p className="text-green-500 text-sm font-mono">
+        {status === 'paired' && ready.self
+          ? 'Waiting for opponent to be ready'
+          : STATUS_TEXT[status]}
+      </p>
+      {status === 'paired' && !ready.self && (
+        <button
+          type="button"
+          onClick={sendReady}
+          className="text-green-500 text-sm font-mono outline outline-green-500 px-4 py-1 hover:bg-green-500 hover:text-black"
+        >
+          Ready{ready.opponent && ' (opponent is ready)'}
+        </button>
+      )}
       <section
         className="game-screen mx-auto my-auto outline outline-green-500 relative overflow-hidden"
         style={
