@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { setBallPosition, useBallMovement } from '#/hooks/useBallMovement'
-import type { BallPosition } from '#/hooks/useBallMovement'
-import { setBatOffset, useBatControls } from '#/hooks/useBatControls'
+import {
+  mirrorBall,
+  receiveBall,
+  useBallMovement,
+} from '#/hooks/useBallMovement'
+import type { LocalBallState } from '#/hooks/useBallMovement'
+import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
+import type { BallState, BatState, Direction } from '#/server/GameRoom'
 
 type PlaySearch = { room?: string }
 
@@ -37,6 +42,8 @@ function Play() {
   const topBatRef = useRef<HTMLDivElement | null>(null)
   const bottomBatRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<HTMLDivElement | null>(null)
+  const opponentBat = useRef<BatState | null>(null)
+  const ballState = useRef<LocalBallState | null>(null)
 
   useEffect(() => {
     if (!room) {
@@ -48,36 +55,43 @@ function Play() {
   }, [room, navigate])
 
   // Both players see themselves at the bottom, so the opponent is mirrored
-  const onOpponentMove = useCallback((offset: number) => {
-    if (topBatRef.current) setBatOffset(topBatRef.current, -offset)
+  const onOpponentBat = useCallback(({ offset, direction, t }: BatState) => {
+    opponentBat.current = {
+      offset: -offset,
+      direction: -direction as Direction,
+      t,
+    }
   }, [])
 
-  const onBallMove = useCallback(({ x, y }: BallPosition) => {
-    if (ballRef.current) setBallPosition(ballRef.current, { x: -x, y: -y })
+  const onBall = useCallback((ball: BallState) => {
+    receiveBall(ballState, mirrorBall(ball))
   }, [])
 
-  const { status, player, sendMove, sendBall } = useGameRoom({
+  const { status, player, now, sendBat, sendBall } = useGameRoom({
     roomId: room,
-    onOpponentMove,
-    onBallMove,
+    onOpponentBat,
+    onBall,
   })
 
-  useBatControls({ batRef: bottomBatRef, onMove: sendMove })
+  useBatControls({ batRef: bottomBatRef, onChange: sendBat })
+  useRemoteBat({ batRef: topBatRef, batState: opponentBat, now })
 
-  // Player 0 runs the ball and sends its position to player 1
   useBallMovement({
     ballRef,
     topBatRef,
     bottomBatRef,
-    active: status === 'playing' && player === 0,
-    onMove: sendBall,
+    ballState,
+    active: status === 'playing',
+    serveFirst: player === 0,
+    now,
+    onEvent: sendBall,
   })
 
   return (
     <main className="h-dvh flex flex-col items-center justify-center gap-2">
       <p className="text-green-500 text-sm font-mono">{STATUS_TEXT[status]}</p>
       <section
-        className="game-screen mx-auto my-auto outline outline-green-500 relative"
+        className="game-screen mx-auto my-auto outline outline-green-500 relative overflow-hidden"
         style={
           {
             '--grid-cols': GRID_COLS,
