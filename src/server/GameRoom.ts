@@ -88,6 +88,8 @@ type Attachment = {
 }
 
 const HINT_KEY = 'hint'
+// Milliseconds the lobby keeps sending late joiners to the placed room before the name is reusable
+const HINT_LIFETIME = 10 * 60 * 1000
 const EARTH_RADIUS_KM = 6371
 const MAX_SIGNAL_LENGTH = 16384
 const MAX_SERVE_ANGLE = Math.PI / 6
@@ -218,6 +220,7 @@ export class GameRoom extends DurableObject<Env> {
       // Both players are known, so move the game to a room between them
       const hint = fairestRegion(location, opponentLocation)
       await this.ctx.storage.put(HINT_KEY, hint)
+      await this.ctx.storage.setAlarm(Date.now() + HINT_LIFETIME)
       for (const ws of [server, opponent]) {
         this.send(ws, { type: 'relocate', hint })
         ws.close(1000, 'Relocated')
@@ -229,6 +232,11 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  // The placement expired, so the next pair in this lobby gets a fresh region
+  async alarm() {
+    await this.ctx.storage.delete(HINT_KEY)
   }
 
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
