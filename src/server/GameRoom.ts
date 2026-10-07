@@ -96,6 +96,8 @@ const MAX_SERVE_ANGLE = Math.PI / 6
 const MIN_START_DELAY = 200
 const MAX_START_DELAY = 1000
 const START_MARGIN = 100
+// Smaller round trip changes are not stored, to avoid rewriting the attachment on every ping
+const RTT_CHANGE = 20
 
 // Direction is a unit vector in screen-height units
 const createServe = (t: number): BallState => {
@@ -247,10 +249,14 @@ export class GameRoom extends DurableObject<Env> {
     if (data?.type === 'ping' && isFiniteNumber(data.t)) {
       this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
       if (isFiniteNumber(data.rtt)) {
-        ws.serializeAttachment({
-          ...this.attachment(ws),
-          rtt: Math.min(MAX_START_DELAY, Math.max(0, data.rtt)),
-        } satisfies Attachment)
+        const attachment = this.attachment(ws)
+        const rtt = Math.min(MAX_START_DELAY, Math.max(0, data.rtt))
+        if (
+          attachment.rtt === undefined ||
+          Math.abs(rtt - attachment.rtt) >= RTT_CHANGE
+        ) {
+          ws.serializeAttachment({ ...attachment, rtt } satisfies Attachment)
+        }
       }
     } else if (data?.type === 'signal' && opponent) {
       const signal = parseSignal(data.signal)

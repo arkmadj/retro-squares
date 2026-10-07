@@ -34,6 +34,8 @@ type ClockSample = { rtt: number; offset: number }
 type PeerMessage = Extract<ClientMessage, { type: 'bat' | 'ball' }>
 
 const PING_INTERVAL = 1000
+// Once the clock has a full set of samples, slower pings let the server hibernate
+const STABLE_PING_INTERVAL = 5000
 const CLOCK_SAMPLES = 8
 // Pings sent back to back after connecting, so the clock is accurate quickly
 const CLOCK_BURST = 6
@@ -125,6 +127,7 @@ export const useGameRoom = ({
     // Failed reconnects since the server last welcomed this player
     let attempts = 0
     let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let pingTimer: ReturnType<typeof setTimeout> | undefined
     let samples: ClockSample[] = []
     // Pings left in the current burst; each pong sends the next one
     let burst = 0
@@ -358,6 +361,15 @@ export const useGameRoom = ({
       )
     }
 
+    const schedulePing = () => {
+      const delay =
+        samples.length < CLOCK_SAMPLES ? PING_INTERVAL : STABLE_PING_INTERVAL
+      pingTimer = setTimeout(() => {
+        ping()
+        schedulePing()
+      }, delay)
+    }
+
     // Players keep their number when reconnecting, so the server gives back the same seat
     const connect = () => {
       const query = self === null ? '' : `?player=${self}`
@@ -486,12 +498,12 @@ export const useGameRoom = ({
     }
 
     connect()
-    const pingInterval = setInterval(ping, PING_INTERVAL)
+    schedulePing()
 
     return () => {
       active = false
       clearTimeout(retryTimer)
-      clearInterval(pingInterval)
+      clearTimeout(pingTimer)
       closePeer()
       socket.current = null
       ws.close()
