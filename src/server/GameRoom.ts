@@ -239,7 +239,7 @@ export class GameRoom extends DurableObject<Env> {
           attachment.rtt === undefined ||
           Math.abs(rtt - attachment.rtt) >= RTT_CHANGE
         ) {
-          ws.serializeAttachment({ ...attachment, rtt } satisfies Attachment)
+          this.update(ws, { rtt })
         }
       }
     } else if (data?.type === 'signal' && opponent) {
@@ -248,10 +248,7 @@ export class GameRoom extends DurableObject<Env> {
     } else if (inProgress && data?.type === 'bat') {
       const bat = parseBat(data)
       if (!bat) return
-      ws.serializeAttachment({
-        ...this.attachment(ws),
-        bat,
-      } satisfies Attachment)
+      this.update(ws, { bat })
       this.send(opponent, { type: 'bat', ...bat })
     } else if (inProgress && data?.type === 'ball') {
       // Each player reports hits and misses on their own bat
@@ -262,10 +259,7 @@ export class GameRoom extends DurableObject<Env> {
       opponent &&
       !this.attachment(ws).ready
     ) {
-      ws.serializeAttachment({
-        ...this.attachment(ws),
-        ready: true,
-      } satisfies Attachment)
+      this.update(ws, { ready: true })
       const opponentReady = this.attachment(opponent).ready
       this.send(ws, { type: 'ready', self: true, opponent: opponentReady })
       this.send(opponent, {
@@ -329,12 +323,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private resetPlayer(ws: WebSocket, serves: boolean) {
-    ws.serializeAttachment({
-      ...this.attachment(ws),
+    this.update(ws, {
       bat: { offset: 0, direction: 0, t: Date.now() },
       ready: false,
       serves,
-    } satisfies Attachment)
+    })
   }
 
   // Takes one message from the socket's budget, if any is left
@@ -358,6 +351,13 @@ export class GameRoom extends DurableObject<Env> {
 
   private attachment(ws: WebSocket) {
     return ws.deserializeAttachment() as Attachment
+  }
+
+  private update(ws: WebSocket, patch: Partial<Attachment>) {
+    ws.serializeAttachment({
+      ...this.attachment(ws),
+      ...patch,
+    } satisfies Attachment)
   }
 
   private send(ws: WebSocket, message: ServerMessage) {
