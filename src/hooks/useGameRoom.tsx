@@ -55,6 +55,18 @@ const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
   }
 }
 
+const parseServerMessage = (data: unknown): ServerMessage | undefined => {
+  if (typeof data !== 'string') return
+  try {
+    const message: unknown = JSON.parse(data)
+    if (typeof message === 'object' && message !== null) {
+      return message as ServerMessage
+    }
+  } catch {
+    // Malformed messages are ignored
+  }
+}
+
 export const useGameRoom = ({
   roomId,
   onOpponentBat,
@@ -341,7 +353,9 @@ export const useGameRoom = ({
         ping()
       })
       current.addEventListener('message', (event) => {
-        if (active && current === ws) handleMessage(JSON.parse(event.data))
+        if (!active || current !== ws) return
+        const message = parseServerMessage(event.data)
+        if (message) handleMessage(message)
       })
       current.addEventListener('close', () => {
         if (!active || current !== ws) return
