@@ -355,6 +355,11 @@ export class GameRoom extends DurableObject<Env> {
 
   webSocketError(ws: WebSocket) {
     this.leave(ws)
+    try {
+      ws.close(1011, 'WebSocket error')
+    } catch {
+      // Already closed
+    }
   }
 
   private leave(ws: WebSocket) {
