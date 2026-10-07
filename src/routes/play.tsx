@@ -31,6 +31,7 @@ const BAT_HEIGHT = 0.5
 
 const STATUS_TEXT: Record<RoomStatus, string> = {
   connecting: 'Connecting…',
+  reconnecting: 'Connection lost — reconnecting…',
   waiting: 'Waiting for player 2 — share this link',
   paired: 'Opponent connected — press Ready to start',
   playing: 'Game on',

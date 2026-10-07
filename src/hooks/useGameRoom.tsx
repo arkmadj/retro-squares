@@ -10,7 +10,13 @@ import type {
 import { parseBall, parseBat, ROOM_FULL_CODE } from '#/server/updates'
 
 export type RoomStatus =
-  'connecting' | 'waiting' | 'paired' | 'playing' | 'full' | 'closed'
+  | 'connecting'
+  | 'reconnecting'
+  | 'waiting'
+  | 'paired'
+  | 'playing'
+  | 'full'
+  | 'closed'
 
 export type ReadyState = { self: boolean; opponent: boolean }
 
@@ -31,6 +37,10 @@ const PING_INTERVAL = 1000
 const CLOCK_SAMPLES = 8
 // Pings sent back to back after connecting, so the clock is accurate quickly
 const CLOCK_BURST = 6
+// Reconnect delays double from the base up to the cap; the session ends after the last attempt
+const RECONNECT_BASE_DELAY = 500
+const RECONNECT_MAX_DELAY = 8000
+const RECONNECT_ATTEMPTS = 8
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
   { urls: 'stun:stun.l.google.com:19302' },
@@ -110,6 +120,11 @@ export const useGameRoom = ({
     let ws: WebSocket
     // Cleared on cleanup so this effect's sockets stop touching shared state
     let active = true
+    // The lobby, or the room it placed the game in; reconnects go back here
+    let path = `/ws/${roomId}`
+    // Failed reconnects since the server last welcomed this player
+    let attempts = 0
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
     let samples: ClockSample[] = []
     // Pings left in the current burst; each pong sends the next one
     let burst = 0
@@ -343,8 +358,12 @@ export const useGameRoom = ({
       )
     }
 
-    const connect = (path: string) => {
-      const current = new WebSocket(`${protocol}://${location.host}${path}`)
+    // Players keep their number when reconnecting, so the server gives back the same seat
+    const connect = () => {
+      const query = self === null ? '' : `?player=${self}`
+      const current = new WebSocket(
+        `${protocol}://${location.host}${path}${query}`,
+      )
       ws = current
       socket.current = current
       current.addEventListener('open', () => {
@@ -361,7 +380,24 @@ export const useGameRoom = ({
         if (!active || current !== ws) return
         endRound()
         closePeer()
-        setStatus(event.code === ROOM_FULL_CODE ? 'full' : 'closed')
+        const full = event.code === ROOM_FULL_CODE
+        // A first join to a full room is final; on a reconnect the server may still hold the old seat
+        if ((full && self === null) || attempts >= RECONNECT_ATTEMPTS) {
+          setStatus(full ? 'full' : 'closed')
+          return
+        }
+        const delay = Math.min(
+          RECONNECT_MAX_DELAY,
+          RECONNECT_BASE_DELAY * 2 ** attempts,
+        )
+        attempts++
+        setStatus('reconnecting')
+        setReady(NOT_READY)
+        retryTimer = setTimeout(() => {
+          if (!active) return
+          samples = []
+          connect()
+        }, delay)
       })
     }
 
@@ -372,6 +408,7 @@ export const useGameRoom = ({
             clockOffset.current = message.time - performance.now()
           }
           self = message.player
+          attempts = 0
           endRound()
           setPlayer(message.player)
           setStatus('waiting')
@@ -440,19 +477,20 @@ export const useGameRoom = ({
           samples = []
           endRound()
           closePeer()
-          const query = self === null ? '' : `?player=${self}`
-          connect(`/ws/${roomId}/${message.hint}${query}`)
+          path = `/ws/${roomId}/${message.hint}`
+          connect()
           lobby.close()
           break
         }
       }
     }
 
-    connect(`/ws/${roomId}`)
+    connect()
     const pingInterval = setInterval(ping, PING_INTERVAL)
 
     return () => {
       active = false
+      clearTimeout(retryTimer)
       clearInterval(pingInterval)
       closePeer()
       socket.current = null
