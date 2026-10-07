@@ -96,11 +96,15 @@ export const useGameRoom = ({
     setReady(NOT_READY)
 
     let ws: WebSocket
+    // Cleared on cleanup so this effect's sockets stop touching shared state
+    let active = true
     let samples: ClockSample[] = []
     // Pings left in the current burst; each pong sends the next one
     let burst = 0
     let self: Player | null = null
     let peer: RTCPeerConnection | null = null
+    // The peer's open data channel, kept while the connection briefly drops
+    let peerChannel: RTCDataChannel | null = null
     // Candidates that arrived before the opponent's description
     let pendingCandidates: RTCIceCandidateInit[] = []
     // Updates from before these times belong to an earlier round or bat movement
@@ -181,6 +185,7 @@ export const useGameRoom = ({
 
     const closePeer = () => {
       channel.current = null
+      peerChannel = null
       setDirect(false)
       pendingCandidates = []
       peer?.close()
@@ -194,6 +199,8 @@ export const useGameRoom = ({
     ) => {
       dc.addEventListener('open', () => {
         if (peer !== connection) return
+        peerChannel = dc
+        if (connection.connectionState === 'disconnected') return
         channel.current = dc
         setDirect(true)
       })
@@ -222,6 +229,27 @@ export const useGameRoom = ({
           sdpMid: candidate.sdpMid,
           sdpMLineIndex: candidate.sdpMLineIndex,
         })
+      })
+      // The data channel can stay open long after the connection is lost
+      connection.addEventListener('connectionstatechange', () => {
+        if (peer !== connection) return
+        switch (connection.connectionState) {
+          case 'failed':
+          case 'closed':
+            closePeer()
+            break
+          case 'disconnected':
+            // Updates go through the server until the connection recovers
+            channel.current = null
+            setDirect(false)
+            break
+          case 'connected':
+            if (peerChannel?.readyState === 'open') {
+              channel.current = peerChannel
+              setDirect(true)
+            }
+            break
+        }
       })
       if (initiator) {
         setupChannel(
@@ -304,14 +332,15 @@ export const useGameRoom = ({
       ws = current
       socket.current = current
       current.addEventListener('open', () => {
+        if (!active || current !== ws) return
         burst = CLOCK_BURST
         ping()
       })
       current.addEventListener('message', (event) => {
-        if (current === ws) handleMessage(JSON.parse(event.data))
+        if (active && current === ws) handleMessage(JSON.parse(event.data))
       })
       current.addEventListener('close', () => {
-        if (current !== ws) return
+        if (!active || current !== ws) return
         endRound()
         closePeer()
         setStatus('closed')
@@ -405,6 +434,7 @@ export const useGameRoom = ({
     const pingInterval = setInterval(ping, PING_INTERVAL)
 
     return () => {
+      active = false
       clearInterval(pingInterval)
       closePeer()
       socket.current = null
