@@ -216,65 +216,100 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
+    if (typeof data?.type !== 'string') return
+
     // Messages over the budget are dropped
-    if (
-      typeof data?.type === 'string' &&
-      BUDGETED_TYPES.has(data.type) &&
-      !this.spend(ws)
-    ) {
-      return
-    }
+    if (BUDGETED_TYPES.has(data.type) && !this.spend(ws)) return
 
     const opponent = this.opponentOf(ws)
-    // Bats and the ball only move while both players are ready
-    const inProgress =
-      !!opponent && this.attachment(ws).ready && this.attachment(opponent).ready
 
-    if (data?.type === 'ping' && isFiniteNumber(data.t)) {
-      this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
-      if (isFiniteNumber(data.rtt)) {
-        const attachment = this.attachment(ws)
-        const rtt = Math.min(MAX_START_DELAY, Math.max(0, data.rtt))
-        if (
-          attachment.rtt === undefined ||
-          Math.abs(rtt - attachment.rtt) >= RTT_CHANGE
-        ) {
-          this.update(ws, { rtt })
-        }
-      }
-    } else if (data?.type === 'signal' && opponent) {
-      const signal = parseSignal(data.signal)
-      if (signal) this.send(opponent, { type: 'signal', signal })
-    } else if (inProgress && data?.type === 'bat') {
-      const bat = parseBat(data)
-      if (!bat) return
-      this.update(ws, { bat })
-      this.send(opponent, { type: 'bat', ...bat })
-    } else if (inProgress && data?.type === 'ball') {
-      // Each player reports hits and misses on their own bat
-      const ball = parseBall(data)
-      if (ball) this.send(opponent, { type: 'ball', ...ball })
-    } else if (
-      data?.type === 'ready' &&
-      opponent &&
-      !this.attachment(ws).ready
+    switch (data.type) {
+      case 'ping':
+        this.onPing(ws, data)
+        break
+      case 'signal':
+        if (opponent) this.onSignal(opponent, data)
+        break
+      case 'bat':
+        if (this.inProgress(ws, opponent)) this.onBat(ws, opponent, data)
+        break
+      case 'ball':
+        if (this.inProgress(ws, opponent)) this.onBall(opponent, data)
+        break
+      case 'ready':
+        if (opponent) this.onReady(ws, opponent)
+        break
+      case 'miss':
+        if (this.inProgress(ws, opponent)) this.onMiss(ws, opponent)
+        break
+    }
+  }
+
+  // Bats and the ball only move while both players are ready
+  private inProgress(
+    ws: WebSocket,
+    opponent: WebSocket | undefined,
+  ): opponent is WebSocket {
+    return (
+      !!opponent && this.attachment(ws).ready && this.attachment(opponent).ready
+    )
+  }
+
+  private onPing(ws: WebSocket, data: Record<string, unknown>) {
+    if (!isFiniteNumber(data.t)) return
+    this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
+    if (!isFiniteNumber(data.rtt)) return
+    const attachment = this.attachment(ws)
+    const rtt = Math.min(MAX_START_DELAY, Math.max(0, data.rtt))
+    if (
+      attachment.rtt === undefined ||
+      Math.abs(rtt - attachment.rtt) >= RTT_CHANGE
     ) {
-      this.update(ws, { ready: true })
-      const opponentReady = this.attachment(opponent).ready
-      this.send(ws, { type: 'ready', self: true, opponent: opponentReady })
-      this.send(opponent, {
-        type: 'ready',
-        self: opponentReady,
-        opponent: true,
-      })
-      if (opponentReady) this.startRound(ws, opponent)
-    } else if (inProgress && data?.type === 'miss') {
-      // The round is over, so both players start the next one from the centre
-      // and the player who missed serves it
-      for (const player of [ws, opponent]) {
-        this.resetPlayer(player, player === ws)
-        this.send(player, { type: 'reset' })
-      }
+      this.update(ws, { rtt })
+    }
+  }
+
+  private onSignal(opponent: WebSocket, data: Record<string, unknown>) {
+    const signal = parseSignal(data.signal)
+    if (signal) this.send(opponent, { type: 'signal', signal })
+  }
+
+  private onBat(
+    ws: WebSocket,
+    opponent: WebSocket,
+    data: Record<string, unknown>,
+  ) {
+    const bat = parseBat(data)
+    if (!bat) return
+    this.update(ws, { bat })
+    this.send(opponent, { type: 'bat', ...bat })
+  }
+
+  // Each player reports hits and misses on their own bat
+  private onBall(opponent: WebSocket, data: Record<string, unknown>) {
+    const ball = parseBall(data)
+    if (ball) this.send(opponent, { type: 'ball', ...ball })
+  }
+
+  private onReady(ws: WebSocket, opponent: WebSocket) {
+    if (this.attachment(ws).ready) return
+    this.update(ws, { ready: true })
+    const opponentReady = this.attachment(opponent).ready
+    this.send(ws, { type: 'ready', self: true, opponent: opponentReady })
+    this.send(opponent, {
+      type: 'ready',
+      self: opponentReady,
+      opponent: true,
+    })
+    if (opponentReady) this.startRound(ws, opponent)
+  }
+
+  // The round is over, so both players start the next one from the centre
+  // and the player who missed serves it
+  private onMiss(ws: WebSocket, opponent: WebSocket) {
+    for (const player of [ws, opponent]) {
+      this.resetPlayer(player, player === ws)
+      this.send(player, { type: 'reset' })
     }
   }
 
