@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
+import { isFiniteNumber, parseBall, parseBat } from '#/server/updates'
 
 export type Player = 0 | 1
 
@@ -74,20 +75,9 @@ type Attachment = {
   location?: Location
 }
 
-const MAX_OFFSET = 0.5
-const MAX_BALL_POSITION = 1
 const HINT_KEY = 'hint'
 const EARTH_RADIUS_KM = 6371
 const MAX_SIGNAL_LENGTH = 16384
-
-const clamp = (value: number, max: number) =>
-  Math.min(max, Math.max(-max, value))
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
-
-const isDirection = (value: unknown): value is Direction =>
-  value === -1 || value === 0 || value === 1
 
 const isSignalText = (value: unknown): value is string =>
   typeof value === 'string' && value.length <= MAX_SIGNAL_LENGTH
@@ -221,43 +211,18 @@ export class GameRoom extends DurableObject<Env> {
     } else if (data?.type === 'signal' && opponent) {
       const signal = parseSignal(data.signal)
       if (signal) this.send(opponent, { type: 'signal', signal })
-    } else if (
-      inProgress &&
-      data?.type === 'bat' &&
-      isFiniteNumber(data.offset) &&
-      isDirection(data.direction) &&
-      isFiniteNumber(data.t)
-    ) {
-      const bat: BatState = {
-        offset: clamp(data.offset, MAX_OFFSET),
-        direction: data.direction,
-        t: data.t,
-      }
+    } else if (inProgress && data?.type === 'bat') {
+      const bat = parseBat(data)
+      if (!bat) return
       ws.serializeAttachment({
         ...this.attachment(ws),
         bat,
       } satisfies Attachment)
       this.send(opponent, { type: 'bat', ...bat })
-    } else if (
-      inProgress &&
-      data?.type === 'ball' &&
-      Number.isSafeInteger(data.seq) &&
-      isFiniteNumber(data.x) &&
-      isFiniteNumber(data.y) &&
-      isFiniteNumber(data.dx) &&
-      isFiniteNumber(data.dy) &&
-      isFiniteNumber(data.t)
-    ) {
+    } else if (inProgress && data?.type === 'ball') {
       // Each player reports hits and misses on their own bat
-      this.send(opponent, {
-        type: 'ball',
-        seq: data.seq as number,
-        x: clamp(data.x, MAX_BALL_POSITION),
-        y: clamp(data.y, MAX_BALL_POSITION),
-        dx: clamp(data.dx, 1),
-        dy: clamp(data.dy, 1),
-        t: data.t,
-      })
+      const ball = parseBall(data)
+      if (ball) this.send(opponent, { type: 'ball', ...ball })
     } else if (data?.type === 'ready' && opponent) {
       ws.serializeAttachment({
         ...this.attachment(ws),

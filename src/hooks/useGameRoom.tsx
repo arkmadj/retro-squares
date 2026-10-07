@@ -3,11 +3,11 @@ import type {
   BallState,
   BatState,
   ClientMessage,
-  Direction,
   Player,
   ServerMessage,
   Signal,
 } from '#/server/GameRoom'
+import { parseBall, parseBat } from '#/server/updates'
 
 export type RoomStatus =
   'connecting' | 'waiting' | 'paired' | 'playing' | 'closed'
@@ -34,13 +34,7 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
 ]
 
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
-
-const isDirection = (value: unknown): value is Direction =>
-  value === -1 || value === 0 || value === 1
-
-// The opponent's messages skip the server, so they are checked here instead
+// The opponent's messages skip the server, so they get the server's checks here
 const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
   if (typeof data !== 'string') return
   let message: Record<string, unknown> | null
@@ -49,37 +43,13 @@ const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
   } catch {
     return
   }
-  if (
-    message?.type === 'bat' &&
-    isFiniteNumber(message.offset) &&
-    isDirection(message.direction) &&
-    isFiniteNumber(message.t)
-  ) {
-    return {
-      type: 'bat',
-      offset: message.offset,
-      direction: message.direction,
-      t: message.t,
-    }
+  if (message?.type === 'bat') {
+    const bat = parseBat(message)
+    return bat && { type: 'bat', ...bat }
   }
-  if (
-    message?.type === 'ball' &&
-    Number.isSafeInteger(message.seq) &&
-    isFiniteNumber(message.x) &&
-    isFiniteNumber(message.y) &&
-    isFiniteNumber(message.dx) &&
-    isFiniteNumber(message.dy) &&
-    isFiniteNumber(message.t)
-  ) {
-    return {
-      type: 'ball',
-      seq: message.seq as number,
-      x: message.x,
-      y: message.y,
-      dx: message.dx,
-      dy: message.dy,
-      t: message.t,
-    }
+  if (message?.type === 'ball') {
+    const ball = parseBall(message)
+    return ball && { type: 'ball', ...ball }
   }
 }
 
@@ -95,6 +65,8 @@ export const useGameRoom = ({
   const onBallRef = useRef(onBall)
   // Server clock minus performance.now(), in milliseconds
   const clockOffset = useRef(0)
+  // Whether this player has pressed Ready for the next round
+  const readySent = useRef(false)
   const [status, setStatus] = useState<RoomStatus>('connecting')
   const [player, setPlayer] = useState<Player | null>(null)
   const [ready, setReady] = useState<ReadyState>(NOT_READY)
@@ -130,6 +102,10 @@ export const useGameRoom = ({
     // Updates from before these times belong to an earlier round or bat movement
     let roundStart = 0
     let lastBatTime = 0
+    // Like the server, direct updates only count while both players are ready
+    let inProgress = false
+    // Direct updates can beat the server's start message, so they wait for it
+    let early: { bat?: BatState; ball?: BallState } = {}
 
     const sendSignal = (signal: Signal) => {
       if (ws.readyState !== WebSocket.OPEN) return
@@ -160,6 +136,36 @@ export const useGameRoom = ({
     const receiveBall = (ball: BallState) => {
       if (ball.t < roundStart) return
       onBallRef.current(ball)
+    }
+
+    const receiveDirect = (message: PeerMessage) => {
+      const { type, ...update } = message
+      if (inProgress) {
+        if (type === 'bat') receiveBat(update as BatState)
+        else receiveBall(update as BallState)
+      } else if (readySent.current) {
+        if (type === 'bat') {
+          const bat = update as BatState
+          if (!early.bat || bat.t >= early.bat.t) early.bat = bat
+        } else {
+          const ball = update as BallState
+          if (!early.ball || ball.seq > early.ball.seq) early.ball = ball
+        }
+      }
+    }
+
+    const startRound = () => {
+      inProgress = true
+      const { bat, ball } = early
+      early = {}
+      if (bat) receiveBat(bat)
+      if (ball) receiveBall(ball)
+    }
+
+    const endRound = () => {
+      inProgress = false
+      readySent.current = false
+      early = {}
     }
 
     const centreOpponentBat = () => {
@@ -195,13 +201,7 @@ export const useGameRoom = ({
       dc.addEventListener('message', (event) => {
         if (peer !== connection) return
         const message = parsePeerMessage(event.data)
-        if (message?.type === 'bat') {
-          const { type: _, ...bat } = message
-          receiveBat(bat)
-        } else if (message?.type === 'ball') {
-          const { type: _, ...ball } = message
-          receiveBall(ball)
-        }
+        if (message) receiveDirect(message)
       })
     }
 
@@ -296,6 +296,7 @@ export const useGameRoom = ({
       })
       current.addEventListener('close', () => {
         if (current !== ws) return
+        endRound()
         closePeer()
         setStatus('closed')
       })
@@ -308,6 +309,7 @@ export const useGameRoom = ({
             clockOffset.current = message.time - performance.now()
           }
           self = message.player
+          endRound()
           setPlayer(message.player)
           setStatus('waiting')
           setReady(NOT_READY)
@@ -327,6 +329,7 @@ export const useGameRoom = ({
           break
         }
         case 'opponent':
+          endRound()
           setStatus(message.connected ? 'paired' : 'waiting')
           setReady(NOT_READY)
           setServing(self === 0)
@@ -339,9 +342,13 @@ export const useGameRoom = ({
           break
         case 'ready':
           setReady({ self: message.self, opponent: message.opponent })
-          if (message.self && message.opponent) setStatus('playing')
+          if (message.self && message.opponent) {
+            startRound()
+            setStatus('playing')
+          }
           break
         case 'reset':
+          endRound()
           setStatus('paired')
           setReady(NOT_READY)
           setServing(message.serve)
@@ -364,6 +371,7 @@ export const useGameRoom = ({
           // The lobby picked a room between both players; its clock is resampled
           const lobby = ws
           samples = []
+          endRound()
           closePeer()
           const query = self === null ? '' : `?player=${self}`
           connect(`/ws/${roomId}/${message.hint}${query}`)
@@ -413,7 +421,10 @@ export const useGameRoom = ({
     [sendToOpponent],
   )
 
-  const sendReady = useCallback(() => send({ type: 'ready' }), [send])
+  const sendReady = useCallback(() => {
+    readySent.current = true
+    send({ type: 'ready' })
+  }, [send])
 
   const sendMiss = useCallback(() => send({ type: 'miss' }), [send])
 
