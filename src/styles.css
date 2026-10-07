@@ -1,5 +1,4 @@
-
-@import "tailwindcss";
+@import 'tailwindcss';
 
 * {
   box-sizing: border-box;
@@ -13,5 +12,10 @@ body,
 
 body {
   margin: 0;
+  background: black;
 }
 
+.game-screen {
+  aspect-ratio: 1 / 2;
+  width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 2rem) / 2));
+}
