@@ -100,6 +100,12 @@ const MAX_START_DELAY = 1000
 const START_MARGIN = 100
 // Smaller round trip changes are not stored, to avoid rewriting the attachment on every ping
 const RTT_CHANGE = 20
+// Each socket may burst this many relayed messages, refilled at this rate per second
+const MESSAGE_BUDGET = 60
+const MESSAGE_REFILL = 30
+const BUDGETED_TYPES = new Set(['bat', 'ball', 'signal'])
+
+type Budget = { tokens: number; t: number }
 
 // Direction is a unit vector in screen-height units
 const createServe = (t: number): BallState => {
@@ -171,6 +177,9 @@ const fairestRegion = (a: Location, b: Location) => {
 }
 
 export class GameRoom extends DurableObject<Env> {
+  // Kept in memory, so a budget starts full again after the room hibernates
+  private budgets = new WeakMap<WebSocket, Budget>()
+
   async fetch(request: Request) {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 })
@@ -246,6 +255,15 @@ export class GameRoom extends DurableObject<Env> {
     try {
       data = JSON.parse(message)
     } catch {
+      return
+    }
+
+    // Messages over the budget are dropped
+    if (
+      typeof data?.type === 'string' &&
+      BUDGETED_TYPES.has(data.type) &&
+      !this.spend(ws)
+    ) {
       return
     }
 
@@ -354,6 +372,21 @@ export class GameRoom extends DurableObject<Env> {
       ready: false,
       serves,
     } satisfies Attachment)
+  }
+
+  // Takes one message from the socket's budget, if any is left
+  private spend(ws: WebSocket) {
+    const now = Date.now()
+    const budget = this.budgets.get(ws) ?? { tokens: MESSAGE_BUDGET, t: now }
+    budget.tokens = Math.min(
+      MESSAGE_BUDGET,
+      budget.tokens + ((now - budget.t) / 1000) * MESSAGE_REFILL,
+    )
+    budget.t = now
+    this.budgets.set(ws, budget)
+    if (budget.tokens < 1) return false
+    budget.tokens--
+    return true
   }
 
   private opponentOf(ws: WebSocket) {
