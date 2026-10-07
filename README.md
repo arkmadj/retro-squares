@@ -1,13 +1,23 @@
-Welcome to your new TanStack Start app!
+# Retro Squares
+
+Retro Squares is a two-player, real-time retro bat-and-ball game built with TanStack Start and Cloudflare Workers. Each game room is backed by a Durable Object that relays bat and ball positions between players over WebSockets.
+
+## How To Play
+
+1. Open `/play` — a new room is created and its ID is added to the URL.
+2. Share the link with a second player.
+3. Move your bat with the `←` / `→` arrow keys or `A` / `D`.
 
 # Getting Started
 
-To run this application:
+To run Retro Squares locally:
 
 ```bash
 npm install
 npm run dev
 ```
+
+The app runs at http://localhost:3000.
 
 # Building For Production
 
@@ -100,7 +110,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
+      { title: 'Retro Squares' },
     ],
   }),
   shellComponent: ({ children }) => (
