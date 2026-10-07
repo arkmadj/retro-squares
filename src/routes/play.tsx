@@ -10,7 +10,7 @@ import type { LocalBallState } from '#/hooks/useBallMovement'
 import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
-import type { BallState, BatState, Direction } from '#/server/GameRoom'
+import type { BallState, BatState, Direction } from '#/server/messages'
 
 type PlaySearch = { room?: string }
 

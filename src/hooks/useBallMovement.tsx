@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import type { BallState } from '#/server/GameRoom'
+import type { BallState } from '#/server/messages'
 
 // Position from the centre of the game screen, as fractions of its width and height
 export type BallPosition = { x: number; y: number }

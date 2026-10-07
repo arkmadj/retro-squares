@@ -6,7 +6,7 @@ import type {
   Player,
   ServerMessage,
   Signal,
-} from '#/server/GameRoom'
+} from '#/server/messages'
 import {
   ICE_CREDENTIAL_TTL,
   ICE_SERVERS_PATH,
