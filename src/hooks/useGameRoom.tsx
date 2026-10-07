@@ -29,6 +29,8 @@ type PeerMessage = Extract<ClientMessage, { type: 'bat' | 'ball' }>
 
 const PING_INTERVAL = 1000
 const CLOCK_SAMPLES = 8
+// Pings sent back to back after connecting, so the clock is accurate quickly
+const CLOCK_BURST = 6
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
   { urls: 'stun:stun.l.google.com:19302' },
@@ -70,8 +72,8 @@ export const useGameRoom = ({
   const [status, setStatus] = useState<RoomStatus>('connecting')
   const [player, setPlayer] = useState<Player | null>(null)
   const [ready, setReady] = useState<ReadyState>(NOT_READY)
-  // Whether this player serves when the next round starts
-  const [serving, setServing] = useState(false)
+  // The server's serve for the current round, in this player's view
+  const [serve, setServe] = useState<BallState | null>(null)
   // Whether bat and ball updates go directly to the opponent
   const [direct, setDirect] = useState(false)
 
@@ -95,6 +97,8 @@ export const useGameRoom = ({
 
     let ws: WebSocket
     let samples: ClockSample[] = []
+    // Pings left in the current burst; each pong sends the next one
+    let burst = 0
     let self: Player | null = null
     let peer: RTCPeerConnection | null = null
     // Candidates that arrived before the opponent's description
@@ -276,12 +280,21 @@ export const useGameRoom = ({
       }
     }
 
+    // The median round trip lets the server allow for slow moments when
+    // scheduling a round's start
+    const typicalRtt = () => {
+      if (samples.length === 0) return
+      const rtts = samples.map((sample) => sample.rtt).sort((a, b) => a - b)
+      return rtts[Math.floor(rtts.length / 2)]
+    }
+
     const ping = () => {
       if (ws.readyState !== WebSocket.OPEN) return
       ws.send(
         JSON.stringify({
           type: 'ping',
           t: performance.now(),
+          rtt: typicalRtt(),
         } satisfies ClientMessage),
       )
     }
@@ -290,7 +303,10 @@ export const useGameRoom = ({
       const current = new WebSocket(`${protocol}://${location.host}${path}`)
       ws = current
       socket.current = current
-      current.addEventListener('open', ping)
+      current.addEventListener('open', () => {
+        burst = CLOCK_BURST
+        ping()
+      })
       current.addEventListener('message', (event) => {
         if (current === ws) handleMessage(JSON.parse(event.data))
       })
@@ -313,8 +329,6 @@ export const useGameRoom = ({
           setPlayer(message.player)
           setStatus('waiting')
           setReady(NOT_READY)
-          // The host serves first in every new game
-          setServing(message.player === 0)
           break
         case 'pong': {
           // The lowest round trip gives the most accurate estimate
@@ -326,13 +340,18 @@ export const useGameRoom = ({
           ].slice(-CLOCK_SAMPLES)
           const best = samples.reduce((a, b) => (b.rtt < a.rtt ? b : a))
           clockOffset.current = best.offset
+          if (burst > 1) {
+            burst--
+            ping()
+          } else {
+            burst = 0
+          }
           break
         }
         case 'opponent':
           endRound()
           setStatus(message.connected ? 'paired' : 'waiting')
           setReady(NOT_READY)
-          setServing(self === 0)
           centreOpponentBat()
           if (message.connected && self === 0) {
             openPeer(true)
@@ -342,16 +361,17 @@ export const useGameRoom = ({
           break
         case 'ready':
           setReady({ self: message.self, opponent: message.opponent })
-          if (message.self && message.opponent) {
-            startRound()
-            setStatus('playing')
-          }
+          break
+        case 'start':
+          // The ball waits at the centre until the server's start time
+          startRound()
+          setServe(message.ball)
+          setStatus('playing')
           break
         case 'reset':
           endRound()
           setStatus('paired')
           setReady(NOT_READY)
-          setServing(message.serve)
           centreOpponentBat()
           break
         case 'bat': {
@@ -432,7 +452,7 @@ export const useGameRoom = ({
     status,
     player,
     ready,
-    serving,
+    serve,
     direct,
     now,
     sendBat,

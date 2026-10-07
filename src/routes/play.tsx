@@ -71,7 +71,7 @@ function Play() {
   const {
     status,
     ready,
-    serving,
+    serve,
     direct,
     now,
     sendBat,
@@ -97,7 +97,7 @@ function Play() {
     bottomBatRef,
     ballState,
     active: status === 'playing',
-    serveFirst: serving,
+    serve,
     now,
     onEvent: sendBall,
     onMiss: sendMiss,

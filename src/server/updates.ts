@@ -14,6 +14,15 @@ export const isFiniteNumber = (value: unknown): value is number =>
 export const isDirection = (value: unknown): value is Direction =>
   value === -1 || value === 0 || value === 1
 
+// Both players see themselves at the bottom, so the opponent's view is rotated
+export const mirrorBall = (ball: BallState): BallState => ({
+  ...ball,
+  x: -ball.x,
+  y: -ball.y,
+  dx: -ball.dx,
+  dy: -ball.dy,
+})
+
 // Copies only the known fields and keeps the bat on the screen
 export const parseBat = (
   data: Record<string, unknown>,

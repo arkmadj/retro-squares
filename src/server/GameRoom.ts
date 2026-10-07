@@ -1,5 +1,10 @@
 import { DurableObject } from 'cloudflare:workers'
-import { isFiniteNumber, parseBall, parseBat } from '#/server/updates'
+import {
+  isFiniteNumber,
+  mirrorBall,
+  parseBall,
+  parseBat,
+} from '#/server/updates'
 
 export type Player = 0 | 1
 
@@ -29,7 +34,8 @@ export type Signal =
     }
 
 export type ClientMessage =
-  | { type: 'ping'; t: number }
+  // `rtt` is the player's measured round trip to the server, in milliseconds
+  | { type: 'ping'; t: number; rtt?: number }
   | ({ type: 'bat' } & BatState)
   | ({ type: 'ball' } & BallState)
   | { type: 'ready' }
@@ -65,19 +71,44 @@ export type ServerMessage =
   | ({ type: 'bat' } & BatState)
   | ({ type: 'ball' } & BallState)
   | { type: 'ready'; self: boolean; opponent: boolean }
-  | { type: 'reset'; serve: boolean }
+  // The round's serve in this player's view; the ball moves from `ball.t`
+  | { type: 'start'; ball: BallState }
+  | { type: 'reset' }
   | { type: 'signal'; signal: Signal }
 
 type Attachment = {
   player: Player
   bat: BatState
   ready: boolean
+  // Whether this player serves when the next round starts
+  serves: boolean
+  rtt?: number
   location?: Location
 }
 
 const HINT_KEY = 'hint'
 const EARTH_RADIUS_KM = 6371
 const MAX_SIGNAL_LENGTH = 16384
+const MAX_SERVE_ANGLE = Math.PI / 6
+// Milliseconds between the start message and the serve moving, so it reaches
+// both players first: the slower round trip plus a margin, within these limits
+const MIN_START_DELAY = 200
+const MAX_START_DELAY = 1000
+const START_MARGIN = 100
+
+// Direction is a unit vector in screen-height units
+const createServe = (t: number): BallState => {
+  const angle = (Math.random() * 2 - 1) * MAX_SERVE_ANGLE
+  const vertical = Math.random() < 0.5 ? -1 : 1
+  return {
+    seq: 1,
+    x: 0,
+    y: 0,
+    dx: Math.sin(angle),
+    dy: Math.cos(angle) * vertical,
+    t,
+  }
+}
 
 const isSignalText = (value: unknown): value is string =>
   typeof value === 'string' && value.length <= MAX_SIGNAL_LENGTH
@@ -168,6 +199,8 @@ export class GameRoom extends DurableObject<Env> {
       player,
       bat: { offset: 0, direction: 0, t: Date.now() },
       ready: false,
+      // The host serves first in every new game
+      serves: player === 0,
       location,
     } satisfies Attachment)
 
@@ -208,6 +241,12 @@ export class GameRoom extends DurableObject<Env> {
 
     if (data?.type === 'ping' && isFiniteNumber(data.t)) {
       this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
+      if (isFiniteNumber(data.rtt)) {
+        ws.serializeAttachment({
+          ...this.attachment(ws),
+          rtt: Math.min(MAX_START_DELAY, Math.max(0, data.rtt)),
+        } satisfies Attachment)
+      }
     } else if (data?.type === 'signal' && opponent) {
       const signal = parseSignal(data.signal)
       if (signal) this.send(opponent, { type: 'signal', signal })
@@ -223,7 +262,11 @@ export class GameRoom extends DurableObject<Env> {
       // Each player reports hits and misses on their own bat
       const ball = parseBall(data)
       if (ball) this.send(opponent, { type: 'ball', ...ball })
-    } else if (data?.type === 'ready' && opponent) {
+    } else if (
+      data?.type === 'ready' &&
+      opponent &&
+      !this.attachment(ws).ready
+    ) {
       ws.serializeAttachment({
         ...this.attachment(ws),
         ready: true,
@@ -235,13 +278,32 @@ export class GameRoom extends DurableObject<Env> {
         self: opponentReady,
         opponent: true,
       })
+      if (opponentReady) this.startRound(ws, opponent)
     } else if (inProgress && data?.type === 'miss') {
       // The round is over, so both players start the next one from the centre
       // and the player who missed serves it
       for (const player of [ws, opponent]) {
-        this.resetPlayer(player)
-        this.send(player, { type: 'reset', serve: player === ws })
+        this.resetPlayer(player, player === ws)
+        this.send(player, { type: 'reset' })
       }
+    }
+  }
+
+  // Both players get the same serve and start time, so the round starts together
+  private startRound(a: WebSocket, b: WebSocket) {
+    const rtt = Math.max(
+      this.attachment(a).rtt ?? MAX_START_DELAY,
+      this.attachment(b).rtt ?? MAX_START_DELAY,
+    )
+    const delay = Math.min(
+      MAX_START_DELAY,
+      Math.max(MIN_START_DELAY, rtt + START_MARGIN),
+    )
+    const ball = createServe(Date.now() + delay)
+    for (const ws of [a, b]) {
+      // The serve is created in the serving player's view; the other sees it mirrored
+      const serves = this.attachment(ws).serves
+      this.send(ws, { type: 'start', ball: serves ? ball : mirrorBall(ball) })
     }
   }
 
@@ -262,15 +324,16 @@ export class GameRoom extends DurableObject<Env> {
     const opponent = this.opponentOf(ws)
     if (!opponent) return
     // The next opponent starts a fresh game, so both must ready up again
-    this.resetPlayer(opponent)
+    this.resetPlayer(opponent, this.attachment(opponent).player === 0)
     this.send(opponent, { type: 'opponent', connected: false })
   }
 
-  private resetPlayer(ws: WebSocket) {
+  private resetPlayer(ws: WebSocket, serves: boolean) {
     ws.serializeAttachment({
       ...this.attachment(ws),
       bat: { offset: 0, direction: 0, t: Date.now() },
       ready: false,
+      serves,
     } satisfies Attachment)
   }
 
