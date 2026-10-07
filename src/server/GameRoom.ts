@@ -4,6 +4,7 @@ import {
   mirrorBall,
   parseBall,
   parseBat,
+  parseJson,
   ROOM_FULL_CODE,
 } from '#/server/updates'
 import type {
@@ -207,15 +208,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    if (typeof message !== 'string') return
-
-    let data: Record<string, unknown> | null
-    try {
-      data = JSON.parse(message)
-    } catch {
-      return
-    }
-
+    const data = parseJson(message)
     if (typeof data?.type !== 'string') return
 
     // Messages over the budget are dropped

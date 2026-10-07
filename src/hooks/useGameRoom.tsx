@@ -12,6 +12,7 @@ import {
   ICE_SERVERS_PATH,
   parseBall,
   parseBat,
+  parseJson,
   ROOM_FULL_CODE,
   STUN_SERVERS,
 } from '#/server/updates'
@@ -81,13 +82,7 @@ const loadIceServers = () => {
 
 // The opponent's messages skip the server, so they get the server's checks here
 const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
-  if (typeof data !== 'string') return
-  let message: Record<string, unknown> | null
-  try {
-    message = JSON.parse(data)
-  } catch {
-    return
-  }
+  const message = parseJson(data)
   if (message?.type === 'bat') {
     const bat = parseBat(message)
     return bat && { type: 'bat', ...bat }
@@ -98,17 +93,8 @@ const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
   }
 }
 
-const parseServerMessage = (data: unknown): ServerMessage | undefined => {
-  if (typeof data !== 'string') return
-  try {
-    const message: unknown = JSON.parse(data)
-    if (typeof message === 'object' && message !== null) {
-      return message as ServerMessage
-    }
-  } catch {
-    // Malformed messages are ignored
-  }
-}
+const parseServerMessage = (data: unknown) =>
+  parseJson(data) as ServerMessage | undefined
 
 export const useGameRoom = ({
   roomId,

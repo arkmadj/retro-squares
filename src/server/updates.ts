@@ -33,6 +33,21 @@ export const isFiniteNumber = (value: unknown): value is number =>
 export const isDirection = (value: unknown): value is Direction =>
   value === -1 || value === 0 || value === 1
 
+// Gives back an object, or nothing for non-text, malformed or non-object messages
+export const parseJson = (
+  data: unknown,
+): Record<string, unknown> | undefined => {
+  if (typeof data !== 'string') return
+  try {
+    const value: unknown = JSON.parse(data)
+    if (typeof value === 'object' && value !== null) {
+      return value as Record<string, unknown>
+    }
+  } catch {
+    // Malformed messages are ignored
+  }
+}
+
 // Both players see themselves at the bottom, so the opponent's view is rotated
 export const mirrorBall = (ball: BallState): BallState => ({
   ...ball,
