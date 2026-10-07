@@ -4,6 +4,7 @@ import {
   mirrorBall,
   parseBall,
   parseBat,
+  ROOM_FULL_CODE,
 } from '#/server/updates'
 
 export type Player = 0 | 1
@@ -189,7 +190,11 @@ export class GameRoom extends DurableObject<Env> {
     const order: Player[] = requested === 1 ? [1, 0] : [0, 1]
     const player = order.find((p) => !taken.includes(p))
     if (player === undefined) {
-      return new Response('Room full', { status: 409 })
+      // A rejected upgrade only reaches the browser as a generic failure
+      const { 0: client, 1: server } = new WebSocketPair()
+      server.accept()
+      server.close(ROOM_FULL_CODE, 'Room full')
+      return new Response(null, { status: 101, webSocket: client })
     }
 
     const location = parseLocation(request.headers.get(LOCATION_HEADER))

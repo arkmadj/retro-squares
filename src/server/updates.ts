@@ -2,6 +2,9 @@
 // these updates directly from the opponent. Kept free of worker imports.
 import type { BallState, BatState, Direction } from '#/server/GameRoom'
 
+// Close code sent when both player slots are taken
+export const ROOM_FULL_CODE = 4009
+
 const MAX_OFFSET = 0.5
 const MAX_BALL_POSITION = 1
 

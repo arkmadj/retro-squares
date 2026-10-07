@@ -7,10 +7,10 @@ import type {
   ServerMessage,
   Signal,
 } from '#/server/GameRoom'
-import { parseBall, parseBat } from '#/server/updates'
+import { parseBall, parseBat, ROOM_FULL_CODE } from '#/server/updates'
 
 export type RoomStatus =
-  'connecting' | 'waiting' | 'paired' | 'playing' | 'closed'
+  'connecting' | 'waiting' | 'paired' | 'playing' | 'full' | 'closed'
 
 export type ReadyState = { self: boolean; opponent: boolean }
 
@@ -357,11 +357,11 @@ export const useGameRoom = ({
         const message = parseServerMessage(event.data)
         if (message) handleMessage(message)
       })
-      current.addEventListener('close', () => {
+      current.addEventListener('close', (event) => {
         if (!active || current !== ws) return
         endRound()
         closePeer()
-        setStatus('closed')
+        setStatus(event.code === ROOM_FULL_CODE ? 'full' : 'closed')
       })
     }
 

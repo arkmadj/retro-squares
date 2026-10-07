@@ -34,6 +34,7 @@ const STATUS_TEXT: Record<RoomStatus, string> = {
   waiting: 'Waiting for player 2 — share this link',
   paired: 'Opponent connected — press Ready to start',
   playing: 'Game on',
+  full: 'Room full',
   closed: 'Disconnected',
 }
 
