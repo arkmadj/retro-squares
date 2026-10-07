@@ -17,12 +17,23 @@ export type BallState = {
   t: number
 }
 
+// WebRTC negotiation relayed between players so they can connect directly
+export type Signal =
+  | { kind: 'description'; type: 'offer' | 'answer'; sdp: string }
+  | {
+      kind: 'candidate'
+      candidate: string
+      sdpMid: string | null
+      sdpMLineIndex: number | null
+    }
+
 export type ClientMessage =
   | { type: 'ping'; t: number }
   | ({ type: 'bat' } & BatState)
   | ({ type: 'ball' } & BallState)
   | { type: 'ready' }
   | { type: 'miss' }
+  | { type: 'signal'; signal: Signal }
 
 type Location = { latitude: number; longitude: number }
 
@@ -54,6 +65,7 @@ export type ServerMessage =
   | ({ type: 'ball' } & BallState)
   | { type: 'ready'; self: boolean; opponent: boolean }
   | { type: 'reset'; serve: boolean }
+  | { type: 'signal'; signal: Signal }
 
 type Attachment = {
   player: Player
@@ -66,6 +78,7 @@ const MAX_OFFSET = 0.5
 const MAX_BALL_POSITION = 1
 const HINT_KEY = 'hint'
 const EARTH_RADIUS_KM = 6371
+const MAX_SIGNAL_LENGTH = 16384
 
 const clamp = (value: number, max: number) =>
   Math.min(max, Math.max(-max, value))
@@ -75,6 +88,36 @@ const isFiniteNumber = (value: unknown): value is number =>
 
 const isDirection = (value: unknown): value is Direction =>
   value === -1 || value === 0 || value === 1
+
+const isSignalText = (value: unknown): value is string =>
+  typeof value === 'string' && value.length <= MAX_SIGNAL_LENGTH
+
+// Copies only the known fields so nothing else is relayed
+const parseSignal = (value: unknown): Signal | undefined => {
+  if (typeof value !== 'object' || value === null) return
+  const signal = value as Record<string, unknown>
+  if (
+    signal.kind === 'description' &&
+    (signal.type === 'offer' || signal.type === 'answer') &&
+    isSignalText(signal.sdp)
+  ) {
+    return { kind: 'description', type: signal.type, sdp: signal.sdp }
+  }
+  if (
+    signal.kind === 'candidate' &&
+    isSignalText(signal.candidate) &&
+    (signal.sdpMid === null || isSignalText(signal.sdpMid)) &&
+    (signal.sdpMLineIndex === null ||
+      Number.isSafeInteger(signal.sdpMLineIndex))
+  ) {
+    return {
+      kind: 'candidate',
+      candidate: signal.candidate,
+      sdpMid: signal.sdpMid,
+      sdpMLineIndex: signal.sdpMLineIndex as number | null,
+    }
+  }
+}
 
 const parseLocation = (value: string | null): Location | undefined => {
   const [latitude, longitude] = (value ?? '').split(',').map(Number)
@@ -175,6 +218,9 @@ export class GameRoom extends DurableObject<Env> {
 
     if (data?.type === 'ping' && isFiniteNumber(data.t)) {
       this.send(ws, { type: 'pong', t: data.t, time: Date.now() })
+    } else if (data?.type === 'signal' && opponent) {
+      const signal = parseSignal(data.signal)
+      if (signal) this.send(opponent, { type: 'signal', signal })
     } else if (
       inProgress &&
       data?.type === 'bat' &&

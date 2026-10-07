@@ -72,6 +72,7 @@ function Play() {
     status,
     ready,
     serving,
+    direct,
     now,
     sendBat,
     sendBall,
@@ -108,6 +109,8 @@ function Play() {
         {status === 'paired' && ready.self
           ? 'Waiting for opponent to be ready'
           : STATUS_TEXT[status]}
+        {(status === 'paired' || status === 'playing') &&
+          (direct ? ' · direct' : ' · relayed')}
       </p>
       {status === 'paired' && !ready.self && (
         <button
