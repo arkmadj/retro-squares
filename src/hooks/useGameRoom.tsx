@@ -120,17 +120,20 @@ export const useGameRoom = ({
     }
 
     const receiveDirect = (message: PeerMessage) => {
-      const { type, ...update } = message
-      if (inProgress) {
-        if (type === 'bat') receiveBat(update as BatState)
-        else receiveBall(update as BallState)
-      } else if (readySent.current) {
-        if (type === 'bat') {
-          const bat = update as BatState
-          if (!early.bat || bat.t >= early.bat.t) early.bat = bat
-        } else {
-          const ball = update as BallState
-          if (!early.ball || ball.seq > early.ball.seq) early.ball = ball
+      if (message.type === 'bat') {
+        const { type: _, ...bat } = message
+        if (inProgress) receiveBat(bat)
+        else if (readySent.current && (!early.bat || bat.t >= early.bat.t)) {
+          early.bat = bat
+        }
+      } else {
+        const { type: _, ...ball } = message
+        if (inProgress) receiveBall(ball)
+        else if (
+          readySent.current &&
+          (!early.ball || ball.seq > early.ball.seq)
+        ) {
+          early.ball = ball
         }
       }
     }
