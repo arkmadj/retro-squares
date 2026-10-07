@@ -218,7 +218,10 @@ export const useGameRoom = ({
 
     // The host makes the offer so both players never offer at once
     const openPeer = (initiator: boolean) => {
+      // Candidates can arrive before the offer they belong to
+      const queued = initiator ? [] : pendingCandidates
       closePeer()
+      pendingCandidates = queued
       const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       peer = connection
       connection.addEventListener('icecandidate', ({ candidate }) => {
@@ -301,7 +304,8 @@ export const useGameRoom = ({
         }
         for (const candidate of pendingCandidates.splice(0)) {
           if (peer !== connection) return
-          await connection.addIceCandidate(candidate)
+          // A stale candidate from an earlier connection is skipped
+          await connection.addIceCandidate(candidate).catch(() => {})
         }
       } catch {
         // Updates keep going through the server
