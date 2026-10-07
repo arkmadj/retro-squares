@@ -5,6 +5,22 @@ import type { BallState, BatState, Direction } from '#/server/GameRoom'
 // Close code sent when both player slots are taken
 export const ROOM_FULL_CODE = 4009
 
+export type IceServer = {
+  urls: string | string[]
+  username?: string
+  credential?: string
+}
+
+// Where the browser gets ICE servers, including short-lived TURN credentials
+export const ICE_SERVERS_PATH = '/api/ice-servers'
+// Seconds the TURN credentials stay valid; a game's connection must not outlive them
+export const ICE_CREDENTIAL_TTL = 4 * 60 * 60
+// Used without TURN, or when credentials can't be fetched
+export const STUN_SERVERS: IceServer[] = [
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' },
+]
+
 const MAX_OFFSET = 0.5
 const MAX_BALL_POSITION = 1
 

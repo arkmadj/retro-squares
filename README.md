@@ -62,6 +62,8 @@ This project uses the Cloudflare Vite plugin (configured in `vite.config.ts`) an
 
 For production env vars, run `wrangler secret put MY_VAR` for each secret listed in `.env.example`. Public (non-secret) vars go in `wrangler.jsonc` under `vars`.
 
+To let players behind strict NATs connect through TURN, create a TURN key in the Cloudflare dashboard (Realtime > TURN) and set `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` with `wrangler secret put` (or in `.dev.vars` locally). Without them, only STUN is used.
+
 KV, D1, R2, and Durable Object bindings are configured in `wrangler.jsonc` — see https://developers.cloudflare.com/workers/wrangler/configuration/.
 
 

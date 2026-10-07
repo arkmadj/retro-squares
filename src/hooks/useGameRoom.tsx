@@ -7,7 +7,14 @@ import type {
   ServerMessage,
   Signal,
 } from '#/server/GameRoom'
-import { parseBall, parseBat, ROOM_FULL_CODE } from '#/server/updates'
+import {
+  ICE_CREDENTIAL_TTL,
+  ICE_SERVERS_PATH,
+  parseBall,
+  parseBat,
+  ROOM_FULL_CODE,
+  STUN_SERVERS,
+} from '#/server/updates'
 
 export type RoomStatus =
   | 'connecting'
@@ -43,10 +50,34 @@ const CLOCK_BURST = 6
 const RECONNECT_BASE_DELAY = 500
 const RECONNECT_MAX_DELAY = 8000
 const RECONNECT_ATTEMPTS = 8
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:stun.l.google.com:19302' },
-]
+// Milliseconds fetched ICE servers are reused, leaving most of the credentials' lifetime for the game
+const ICE_SERVERS_REUSE = (ICE_CREDENTIAL_TTL * 1000) / 4
+
+let iceServers: { servers: Promise<RTCIceServer[]>; t: number } | undefined
+
+// TURN credentials come from the worker; without them only STUN is used
+const loadIceServers = () => {
+  const t = performance.now()
+  if (iceServers && t - iceServers.t < ICE_SERVERS_REUSE) {
+    return iceServers.servers
+  }
+  const entry = {
+    t,
+    servers: fetch(ICE_SERVERS_PATH)
+      .then(async (response): Promise<RTCIceServer[]> => {
+        if (!response.ok) throw new Error('ICE servers unavailable')
+        const body: { iceServers: RTCIceServer[] } = await response.json()
+        return body.iceServers
+      })
+      .catch(() => {
+        // The next connection tries again
+        if (iceServers === entry) iceServers = undefined
+        return STUN_SERVERS
+      }),
+  }
+  iceServers = entry
+  return entry.servers
+}
 
 // The opponent's messages skip the server, so they get the server's checks here
 const parsePeerMessage = (data: unknown): PeerMessage | undefined => {
@@ -135,6 +166,8 @@ export const useGameRoom = ({
     let peer: RTCPeerConnection | null = null
     // The peer's open data channel, kept while the connection briefly drops
     let peerChannel: RTCDataChannel | null = null
+    // Bumped when the peer closes, so a connection still waiting for ICE servers is dropped
+    let peerVersion = 0
     // Candidates that arrived before the opponent's description
     let pendingCandidates: RTCIceCandidateInit[] = []
     // Updates from before these times belong to an earlier round or bat movement
@@ -220,6 +253,7 @@ export const useGameRoom = ({
       pendingCandidates = []
       peer?.close()
       peer = null
+      peerVersion++
     }
 
     // Unordered but reliable, so a late update never holds up newer ones
@@ -247,12 +281,15 @@ export const useGameRoom = ({
     }
 
     // The host makes the offer so both players never offer at once
-    const openPeer = (initiator: boolean) => {
+    const openPeer = async (initiator: boolean) => {
       // Candidates can arrive before the offer they belong to
       const queued = initiator ? [] : pendingCandidates
       closePeer()
       pendingCandidates = queued
-      const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      const version = peerVersion
+      const servers = await loadIceServers()
+      if (version !== peerVersion) return
+      const connection = new RTCPeerConnection({ iceServers: servers })
       peer = connection
       connection.addEventListener('icecandidate', ({ candidate }) => {
         if (peer !== connection || !candidate) return
@@ -302,6 +339,7 @@ export const useGameRoom = ({
           setupChannel(connection, dc),
         )
       }
+      return connection
     }
 
     const handleSignal = async (signal: Signal) => {
@@ -320,8 +358,9 @@ export const useGameRoom = ({
           return
         }
 
-        if (signal.type === 'offer') openPeer(false)
-        const connection = peer
+        // A newer connection may replace this one while it waits for ICE servers
+        const connection =
+          signal.type === 'offer' ? await openPeer(false) : peer
         if (!connection) return
         await connection.setRemoteDescription({
           type: signal.type,
@@ -450,7 +489,7 @@ export const useGameRoom = ({
           setReady(NOT_READY)
           centreOpponentBat()
           if (message.connected && self === 0) {
-            openPeer(true)
+            void openPeer(true)
           } else {
             closePeer()
           }
@@ -497,6 +536,7 @@ export const useGameRoom = ({
       }
     }
 
+    void loadIceServers()
     connect()
     schedulePing()
 
