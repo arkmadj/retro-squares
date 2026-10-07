@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import type { BallState } from '#/server/GameRoom'
+import type { BallState } from '#/server/messages'
 
 // Position from the centre of the game screen, as fractions of its width and height
 export type BallPosition = { x: number; y: number }
@@ -20,26 +20,28 @@ type UseBallMovementOptions = {
   // Current trajectory, shared with the opponent's updates
   ballState: RefObject<LocalBallState | null>
   active: boolean
-  // Whether this player serves when the round starts
-  serveFirst: boolean
+  // The server's serve for this round, in this player's view
+  serve: BallState | null
   // Current time on the shared clock, in milliseconds
   now: () => number
   // Fraction of the game screen height moved per second
   speed?: number
-  // Called when this player hits the ball or serves
+  // Called when this player hits the ball
   onEvent?: (ball: BallState) => void
   // Called once when the ball gets past this player's bat, ending the round
   onMiss?: () => void
 }
 
 const MAX_BOUNCE_ANGLE = Math.PI / 3
-const MAX_SERVE_ANGLE = Math.PI / 6
-// Milliseconds before a served ball moves, so both players see it start together
-const SERVE_DELAY = 600
 // Seconds for a correction to shrink by about two thirds
 const SMOOTHING = 0.08
 // Corrections larger than this jump straight to the new position
 const SNAP_DISTANCE = 0.2
+// A ball first seen after it started is shown from its start at this many
+// times normal speed until it catches up, if it is no later than MAX_CATCH_UP
+// milliseconds. Catching up then finishes before the ball reaches a bat.
+const CATCH_UP_RATE = 3
+const MAX_CATCH_UP = 500
 
 export const setBallPosition = (ball: HTMLElement, { x, y }: BallPosition) => {
   const container = ball.parentElement
@@ -47,14 +49,7 @@ export const setBallPosition = (ball: HTMLElement, { x, y }: BallPosition) => {
   ball.style.transform = `translate(${x * container.clientWidth}px, ${y * container.clientHeight}px)`
 }
 
-// Both players see themselves at the bottom, so the opponent's view is rotated
-export const mirrorBall = (ball: BallState): BallState => ({
-  ...ball,
-  x: -ball.x,
-  y: -ball.y,
-  dx: -ball.dx,
-  dy: -ball.dy,
-})
+export { mirrorBall } from '#/server/updates'
 
 // Accepts the opponent's trajectory if it is newer than ours
 export const receiveBall = (
@@ -68,20 +63,6 @@ export const receiveBall = (
     (ball.seq === current.seq && current.predicted)
   ) {
     ballState.current = ball
-  }
-}
-
-// Direction is a unit vector in screen-height units
-const serve = (seq: number, t: number): BallState => {
-  const angle = (Math.random() * 2 - 1) * MAX_SERVE_ANGLE
-  const vertical = Math.random() < 0.5 ? -1 : 1
-  return {
-    seq,
-    x: 0,
-    y: 0,
-    dx: Math.sin(angle),
-    dy: Math.cos(angle) * vertical,
-    t,
   }
 }
 
@@ -135,7 +116,7 @@ export const useBallMovement = ({
   bottomBatRef,
   ballState,
   active,
-  serveFirst,
+  serve,
   now,
   speed = 0.6,
   onEvent,
@@ -164,9 +145,8 @@ export const useBallMovement = ({
       onEventRef.current?.(next)
     }
 
-    if (serveFirst) {
-      emit(serve((ballState.current?.seq ?? 0) + 1, now() + SERVE_DELAY))
-    }
+    // An opponent's hit that arrived before the start replaces the serve
+    if (serve) receiveBall(ballState, serve)
 
     let frame = requestAnimationFrame(tick)
     let lastState: LocalBallState | null = null
@@ -174,6 +154,8 @@ export const useBallMovement = ({
     let previous: BallPosition = { x: 0, y: 0 }
     let displayed: BallPosition = { x: 0, y: 0 }
     let error: BallPosition = { x: 0, y: 0 }
+    // Shared clock time being shown while catching up with a late ball
+    let shownAt: number | null = null
     let missed = false
 
     function tick(time: number) {
@@ -264,12 +246,25 @@ export const useBallMovement = ({
           state.t > t ||
           Math.hypot(offset.x, offset.y) > SNAP_DISTANCE
         error = snap ? { x: 0, y: 0 } : offset
+        const late = t - state.t
+        shownAt =
+          lastState === null && late > 0 && late <= MAX_CATCH_UP
+            ? state.t
+            : null
         lastState = state
+      }
+
+      // Hits and misses still use the real position, so both players agree
+      let shown = position
+      if (shownAt !== null) {
+        shownAt = Math.min(t, shownAt + delta * 1000 * CATCH_UP_RATE)
+        shown = positionAt(state, shownAt, speed, geometry)
+        if (shownAt >= t) shownAt = null
       }
 
       const decay = Math.exp(-delta / SMOOTHING)
       error = { x: error.x * decay, y: error.y * decay }
-      displayed = { x: position.x + error.x, y: position.y + error.y }
+      displayed = { x: shown.x + error.x, y: shown.y + error.y }
       previous = position
       setBallPosition(ball, displayed)
     }
@@ -278,14 +273,5 @@ export const useBallMovement = ({
       cancelAnimationFrame(frame)
       ballState.current = null
     }
-  }, [
-    active,
-    serveFirst,
-    ballRef,
-    topBatRef,
-    bottomBatRef,
-    ballState,
-    now,
-    speed,
-  ])
+  }, [active, serve, ballRef, topBatRef, bottomBatRef, ballState, now, speed])
 }

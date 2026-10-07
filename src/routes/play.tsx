@@ -10,7 +10,7 @@ import type { LocalBallState } from '#/hooks/useBallMovement'
 import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
-import type { BallState, BatState, Direction } from '#/server/GameRoom'
+import type { BallState, BatState, Direction } from '#/server/messages'
 
 type PlaySearch = { room?: string }
 
@@ -31,9 +31,11 @@ const BAT_HEIGHT = 0.5
 
 const STATUS_TEXT: Record<RoomStatus, string> = {
   connecting: 'Connecting…',
+  reconnecting: 'Connection lost — reconnecting…',
   waiting: 'Waiting for player 2 — share this link',
   paired: 'Opponent connected — press Ready to start',
   playing: 'Game on',
+  full: 'Room full',
   closed: 'Disconnected',
 }
 
@@ -71,7 +73,8 @@ function Play() {
   const {
     status,
     ready,
-    serving,
+    serve,
+    direct,
     now,
     sendBat,
     sendBall,
@@ -96,7 +99,7 @@ function Play() {
     bottomBatRef,
     ballState,
     active: status === 'playing',
-    serveFirst: serving,
+    serve,
     now,
     onEvent: sendBall,
     onMiss: sendMiss,
@@ -108,6 +111,8 @@ function Play() {
         {status === 'paired' && ready.self
           ? 'Waiting for opponent to be ready'
           : STATUS_TEXT[status]}
+        {(status === 'paired' || status === 'playing') &&
+          (direct ? ' · direct' : ' · relayed')}
       </p>
       {status === 'paired' && !ready.self && (
         <button

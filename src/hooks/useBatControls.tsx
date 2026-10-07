@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import type { BatState, Direction } from '#/server/GameRoom'
+import type { BatState, Direction } from '#/server/messages'
 
 type UseBatControlsOptions = {
   batRef: RefObject<HTMLElement | null>

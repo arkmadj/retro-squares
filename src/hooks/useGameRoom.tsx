@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createClockSync } from '#/hooks/clockSync'
+import { createPeerLink, loadIceServers } from '#/hooks/peerLink'
+import type { PeerLink, PeerMessage } from '#/hooks/peerLink'
 import type {
   BallState,
   BatState,
   ClientMessage,
   Player,
   ServerMessage,
-} from '#/server/GameRoom'
+} from '#/server/messages'
+import { parseJson, ROOM_FULL_CODE } from '#/server/updates'
 
 export type RoomStatus =
-  'connecting' | 'waiting' | 'paired' | 'playing' | 'closed'
+  | 'connecting'
+  | 'reconnecting'
+  | 'waiting'
+  | 'paired'
+  | 'playing'
+  | 'full'
+  | 'closed'
 
 export type ReadyState = { self: boolean; opponent: boolean }
 
@@ -20,10 +30,13 @@ type UseGameRoomOptions = {
   onBall: (ball: BallState) => void
 }
 
-type ClockSample = { rtt: number; offset: number }
+// Reconnect delays double from the base up to the cap; the session ends after the last attempt
+const RECONNECT_BASE_DELAY = 500
+const RECONNECT_MAX_DELAY = 8000
+const RECONNECT_ATTEMPTS = 8
 
-const PING_INTERVAL = 1000
-const CLOCK_SAMPLES = 8
+const parseServerMessage = (data: unknown) =>
+  parseJson(data) as ServerMessage | undefined
 
 export const useGameRoom = ({
   roomId,
@@ -31,15 +44,21 @@ export const useGameRoom = ({
   onBall,
 }: UseGameRoomOptions) => {
   const socket = useRef<WebSocket | null>(null)
+  // Direct connection to the opponent for bat and ball updates
+  const peerLink = useRef<PeerLink | null>(null)
   const onOpponentBatRef = useRef(onOpponentBat)
   const onBallRef = useRef(onBall)
   // Server clock minus performance.now(), in milliseconds
   const clockOffset = useRef(0)
+  // Whether this player has pressed Ready for the next round
+  const readySent = useRef(false)
   const [status, setStatus] = useState<RoomStatus>('connecting')
   const [player, setPlayer] = useState<Player | null>(null)
   const [ready, setReady] = useState<ReadyState>(NOT_READY)
-  // Whether this player serves when the next round starts
-  const [serving, setServing] = useState(false)
+  // The server's serve for the current round, in this player's view
+  const [serve, setServe] = useState<BallState | null>(null)
+  // Whether bat and ball updates go directly to the opponent
+  const [direct, setDirect] = useState(false)
 
   useEffect(() => {
     onOpponentBatRef.current = onOpponentBat
@@ -60,102 +79,212 @@ export const useGameRoom = ({
     setReady(NOT_READY)
 
     let ws: WebSocket
-    let samples: ClockSample[] = []
+    // Cleared on cleanup so this effect's sockets stop touching shared state
+    let active = true
+    // The lobby, or the room it placed the game in; reconnects go back here
+    let path = `/ws/${roomId}`
+    // Failed reconnects since the server last welcomed this player
+    let attempts = 0
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
     let self: Player | null = null
+    // Updates from before these times belong to an earlier round or bat movement
+    let roundStart = 0
+    let lastBatTime = 0
+    // Like the server, direct updates only count while both players are ready
+    let inProgress = false
+    // Direct updates can beat the server's start message, so they wait for it
+    let early: { bat?: BatState; ball?: BallState } = {}
 
-    const ping = () => {
+    const sendMessage = (message: ClientMessage) => {
       if (ws.readyState !== WebSocket.OPEN) return
-      ws.send(
-        JSON.stringify({
-          type: 'ping',
-          t: performance.now(),
-        } satisfies ClientMessage),
-      )
+      ws.send(JSON.stringify(message))
     }
 
-    const connect = (path: string) => {
-      const current = new WebSocket(`${protocol}://${location.host}${path}`)
+    const clock = createClockSync({
+      sendPing: sendMessage,
+      setOffset: (offset) => {
+        clockOffset.current = offset
+      },
+    })
+
+    const receiveBat = (bat: BatState) => {
+      // Direct updates can arrive out of order
+      if (bat.t < lastBatTime) return
+      lastBatTime = bat.t
+      onOpponentBatRef.current(bat)
+    }
+
+    const receiveBall = (ball: BallState) => {
+      if (ball.t < roundStart) return
+      onBallRef.current(ball)
+    }
+
+    const receiveDirect = (message: PeerMessage) => {
+      if (message.type === 'bat') {
+        const { type: _, ...bat } = message
+        if (inProgress) receiveBat(bat)
+        else if (readySent.current && (!early.bat || bat.t >= early.bat.t)) {
+          early.bat = bat
+        }
+      } else {
+        const { type: _, ...ball } = message
+        if (inProgress) receiveBall(ball)
+        else if (
+          readySent.current &&
+          (!early.ball || ball.seq > early.ball.seq)
+        ) {
+          early.ball = ball
+        }
+      }
+    }
+
+    const startRound = () => {
+      inProgress = true
+      const { bat, ball } = early
+      early = {}
+      if (bat) receiveBat(bat)
+      if (ball) receiveBall(ball)
+    }
+
+    const endRound = () => {
+      inProgress = false
+      readySent.current = false
+      early = {}
+    }
+
+    const centreOpponentBat = () => {
+      const t = now()
+      roundStart = t
+      lastBatTime = t
+      onOpponentBatRef.current({ offset: 0, direction: 0, t })
+    }
+
+    const peer = createPeerLink({
+      sendSignal: (signal) => sendMessage({ type: 'signal', signal }),
+      onMessage: receiveDirect,
+      onDirect: setDirect,
+    })
+    peerLink.current = peer
+
+    // Players keep their number when reconnecting, so the server gives back the same seat
+    const connect = () => {
+      const query = self === null ? '' : `?player=${self}`
+      const current = new WebSocket(
+        `${protocol}://${location.host}${path}${query}`,
+      )
       ws = current
       socket.current = current
-      current.addEventListener('open', ping)
-      current.addEventListener('message', (event) => {
-        if (current === ws) handleMessage(JSON.parse(event.data))
+      current.addEventListener('open', () => {
+        if (!active || current !== ws) return
+        clock.sync()
       })
-      current.addEventListener('close', () => {
-        if (current === ws) setStatus('closed')
+      current.addEventListener('message', (event) => {
+        if (!active || current !== ws) return
+        const message = parseServerMessage(event.data)
+        if (message) handleMessage(message)
+      })
+      current.addEventListener('close', (event) => {
+        if (!active || current !== ws) return
+        endRound()
+        peer.close()
+        const full = event.code === ROOM_FULL_CODE
+        // A first join to a full room is final; on a reconnect the server may still hold the old seat
+        if ((full && self === null) || attempts >= RECONNECT_ATTEMPTS) {
+          setStatus(full ? 'full' : 'closed')
+          return
+        }
+        const delay = Math.min(
+          RECONNECT_MAX_DELAY,
+          RECONNECT_BASE_DELAY * 2 ** attempts,
+        )
+        attempts++
+        setStatus('reconnecting')
+        setReady(NOT_READY)
+        retryTimer = setTimeout(() => {
+          if (!active) return
+          clock.reset()
+          connect()
+        }, delay)
       })
     }
 
     const handleMessage = (message: ServerMessage) => {
       switch (message.type) {
         case 'welcome':
-          if (samples.length === 0) {
-            clockOffset.current = message.time - performance.now()
-          }
+          clock.seed(message.time)
           self = message.player
+          attempts = 0
+          endRound()
           setPlayer(message.player)
           setStatus('waiting')
           setReady(NOT_READY)
-          // The host serves first in every new game
-          setServing(message.player === 0)
           break
-        case 'pong': {
-          // The lowest round trip gives the most accurate estimate
-          const received = performance.now()
-          const rtt = received - message.t
-          samples = [
-            ...samples,
-            { rtt, offset: message.time + rtt / 2 - received },
-          ].slice(-CLOCK_SAMPLES)
-          const best = samples.reduce((a, b) => (b.rtt < a.rtt ? b : a))
-          clockOffset.current = best.offset
+        case 'pong':
+          clock.pong(message)
           break
-        }
         case 'opponent':
+          endRound()
           setStatus(message.connected ? 'paired' : 'waiting')
           setReady(NOT_READY)
-          setServing(self === 0)
-          if (!message.connected) {
-            onOpponentBatRef.current({ offset: 0, direction: 0, t: now() })
+          centreOpponentBat()
+          if (message.connected && self === 0) {
+            peer.offer()
+          } else {
+            peer.close()
           }
           break
         case 'ready':
           setReady({ self: message.self, opponent: message.opponent })
-          if (message.self && message.opponent) setStatus('playing')
+          break
+        case 'start':
+          // The ball waits at the centre until the server's start time
+          startRound()
+          setServe(message.ball)
+          setStatus('playing')
           break
         case 'reset':
+          endRound()
           setStatus('paired')
           setReady(NOT_READY)
-          setServing(message.serve)
-          onOpponentBatRef.current({ offset: 0, direction: 0, t: now() })
+          centreOpponentBat()
           break
         case 'bat': {
           const { type: _, ...bat } = message
-          onOpponentBatRef.current(bat)
+          receiveBat(bat)
           break
         }
         case 'ball': {
           const { type: _, ...ball } = message
-          onBallRef.current(ball)
+          receiveBall(ball)
           break
         }
+        case 'signal':
+          peer.handleSignal(message.signal)
+          break
         case 'relocate': {
           // The lobby picked a room between both players; its clock is resampled
           const lobby = ws
-          samples = []
-          const query = self === null ? '' : `?player=${self}`
-          connect(`/ws/${roomId}/${message.hint}${query}`)
+          clock.reset()
+          endRound()
+          peer.close()
+          path = `/ws/${roomId}/${message.hint}`
+          connect()
           lobby.close()
           break
         }
       }
     }
 
-    connect(`/ws/${roomId}`)
-    const pingInterval = setInterval(ping, PING_INTERVAL)
+    void loadIceServers()
+    connect()
+    clock.start()
 
     return () => {
-      clearInterval(pingInterval)
+      active = false
+      clearTimeout(retryTimer)
+      clock.stop()
+      peer.close()
+      peerLink.current = null
       socket.current = null
       ws.close()
     }
@@ -167,17 +296,28 @@ export const useGameRoom = ({
     ws.send(JSON.stringify(message))
   }, [])
 
-  const sendBat = useCallback(
-    (bat: Omit<BatState, 't'>) => send({ type: 'bat', ...bat, t: now() }),
-    [send, now],
-  )
-
-  const sendBall = useCallback(
-    (ball: BallState) => send({ type: 'ball', ...ball }),
+  const sendToOpponent = useCallback(
+    (message: PeerMessage) => {
+      if (!peerLink.current?.send(message)) send(message)
+    },
     [send],
   )
 
-  const sendReady = useCallback(() => send({ type: 'ready' }), [send])
+  const sendBat = useCallback(
+    (bat: Omit<BatState, 't'>) =>
+      sendToOpponent({ type: 'bat', ...bat, t: now() }),
+    [sendToOpponent, now],
+  )
+
+  const sendBall = useCallback(
+    (ball: BallState) => sendToOpponent({ type: 'ball', ...ball }),
+    [sendToOpponent],
+  )
+
+  const sendReady = useCallback(() => {
+    readySent.current = true
+    send({ type: 'ready' })
+  }, [send])
 
   const sendMiss = useCallback(() => send({ type: 'miss' }), [send])
 
@@ -185,7 +325,8 @@ export const useGameRoom = ({
     status,
     player,
     ready,
-    serving,
+    serve,
+    direct,
     now,
     sendBat,
     sendBall,
