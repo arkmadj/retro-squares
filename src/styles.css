@@ -29,3 +29,64 @@ body {
     width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 8rem) / 2));
   }
 }
+
+/* Items enter top to bottom after the backdrop, and leave bottom to top before it */
+.game-menu {
+  --menu-duration: 250ms;
+  --menu-stagger: 70ms;
+  animation: game-menu-in var(--menu-duration) ease-out both;
+}
+
+.game-menu[data-state='closed'] {
+  animation: game-menu-out var(--menu-duration) ease-in
+    calc(var(--menu-items) * var(--menu-stagger)) both;
+}
+
+.game-menu-item {
+  animation: game-menu-item-in var(--menu-duration) ease-out
+    calc(var(--menu-duration) / 2 + var(--menu-index) * var(--menu-stagger))
+    both;
+}
+
+.game-menu[data-state='closed'] .game-menu-item {
+  animation: game-menu-item-out var(--menu-duration) ease-in
+    calc((var(--menu-items) - 1 - var(--menu-index)) * var(--menu-stagger)) both;
+}
+
+@keyframes game-menu-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes game-menu-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes game-menu-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@keyframes game-menu-item-out {
+  to {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
+
+/* The backdrop still fades, so the menu unmounts when its animation ends */
+@media (prefers-reduced-motion: reduce) {
+  .game-menu-item,
+  .game-menu[data-state='closed'] .game-menu-item {
+    animation: none;
+  }
+
+  .game-menu[data-state='closed'] {
+    animation-delay: 0ms;
+  }
+}

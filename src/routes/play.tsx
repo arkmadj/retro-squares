@@ -167,36 +167,36 @@ function Play() {
           data-id="ball"
           className="h-[calc(100%/var(--grid-rows)*var(--bat-height))] aspect-square bg-green-500 absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 rounded-full"
         />
-        {status !== 'playing' && (
-          <GameMenu
-            waiting={
-              status === 'connecting' ||
-              status === 'reconnecting' ||
-              status === 'waiting' ||
-              (status === 'paired' && ready.self)
-            }
-            message={
-              <>
-                {status === 'paired' && ready.self
-                  ? 'Waiting for opponent to be ready'
-                  : STATUS_TEXT[status]}
-              </>
-            }
-          >
-            {status === 'paired' && !ready.self && (
-              <Button onClick={sendReady} className="text-sm px-4 py-1">
-                Ready{ready.opponent && ' (opponent is ready)'}
-              </Button>
-            )}
-          </GameMenu>
-        )}
-        {status === 'playing' && countdown > 0 && (
-          <GameMenu message="Get ready">
-            <p aria-live="assertive" className="text-6xl font-bold">
-              {countdown}
-            </p>
-          </GameMenu>
-        )}
+        <GameMenu
+          open={status !== 'playing'}
+          waiting={
+            status === 'connecting' ||
+            status === 'reconnecting' ||
+            status === 'waiting' ||
+            (status === 'paired' && ready.self)
+          }
+          message={
+            <>
+              {status === 'paired' && ready.self
+                ? 'Waiting for opponent to be ready'
+                : STATUS_TEXT[status]}
+            </>
+          }
+        >
+          {status === 'paired' && !ready.self && (
+            <Button onClick={sendReady} className="text-sm px-4 py-1">
+              Ready{ready.opponent && ' (opponent is ready)'}
+            </Button>
+          )}
+        </GameMenu>
+        <GameMenu
+          open={status === 'playing' && countdown > 0}
+          message="Get ready"
+        >
+          <p aria-live="assertive" className="text-6xl font-bold">
+            {countdown}
+          </p>
+        </GameMenu>
       </section>
       <div className="hidden pointer-coarse:flex justify-between game-width">
         <ArrowButton label="Move left" onPress={moveLeft}>
