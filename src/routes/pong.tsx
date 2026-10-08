@@ -16,16 +16,16 @@ import type { RoomStatus } from '#/hooks/useGameRoom'
 import type { BallState, BatState, Direction } from '#/server/messages'
 import { COUNTDOWN } from '#/server/updates'
 
-type PlaySearch = { room?: string }
+type PongSearch = { room?: string }
 
-export const Route = createFileRoute('/play')({
-  validateSearch: (search: Record<string, unknown>): PlaySearch => ({
+export const Route = createFileRoute('/pong')({
+  validateSearch: (search: Record<string, unknown>): PongSearch => ({
     room:
       typeof search.room === 'string' && /^[\w-]{1,64}$/.test(search.room)
         ? search.room
         : undefined,
   }),
-  component: Play,
+  component: Pong,
 })
 
 const GRID_COLS = 10
@@ -99,7 +99,7 @@ function CopyLinkButton() {
   )
 }
 
-function Play() {
+function Pong() {
   const { room } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const topBatRef = useRef<HTMLDivElement | null>(null)
