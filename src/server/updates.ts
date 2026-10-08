@@ -5,6 +5,9 @@ import type { BallState, BatState, Direction } from '#/server/messages'
 // Close code sent when both player slots are taken
 export const ROOM_FULL_CODE = 4009
 
+// Milliseconds the server adds before the serve moves, shown as a 3, 2, 1 countdown
+export const COUNTDOWN = 3000
+
 export type IceServer = {
   urls: string | string[]
   username?: string

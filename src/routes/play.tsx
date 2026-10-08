@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowButton } from '#/components/common/ArrowButton'
@@ -14,6 +14,7 @@ import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
 import type { BallState, BatState, Direction } from '#/server/messages'
+import { COUNTDOWN } from '#/server/updates'
 
 type PlaySearch = { room?: string }
 
@@ -40,6 +41,29 @@ const STATUS_TEXT: Record<RoomStatus, string> = {
   playing: 'Game on',
   full: 'Room full',
   closed: 'Disconnected',
+}
+
+// Whole seconds left until the serve moves, or 0 once it has
+const useCountdown = (
+  serve: BallState | null,
+  active: boolean,
+  now: () => number,
+) => {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!active || !serve) return
+    const start = serve.t
+    let frame = requestAnimationFrame(tick)
+    function tick() {
+      const left = Math.ceil((start - now()) / 1000)
+      setCount(Math.min(COUNTDOWN / 1000, Math.max(0, left)))
+      if (left > 0) frame = requestAnimationFrame(tick)
+    }
+    return () => cancelAnimationFrame(frame)
+  }, [serve, active, now])
+
+  return active && serve ? count : 0
 }
 
 function Play() {
@@ -108,6 +132,8 @@ function Play() {
     onMiss: sendMiss,
   })
 
+  const countdown = useCountdown(serve, status === 'playing', now)
+
   return (
     <main className="h-svh flex flex-col items-center justify-center gap-2 max-md:py-2">
       <section
@@ -162,6 +188,13 @@ function Play() {
                 Ready{ready.opponent && ' (opponent is ready)'}
               </Button>
             )}
+          </GameMenu>
+        )}
+        {status === 'playing' && countdown > 0 && (
+          <GameMenu message="Get ready">
+            <p aria-live="assertive" className="text-6xl font-bold">
+              {countdown}
+            </p>
           </GameMenu>
         )}
       </section>

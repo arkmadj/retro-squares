@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import {
+  COUNTDOWN,
   isFiniteNumber,
   mirrorBall,
   parseBall,
@@ -316,7 +317,7 @@ export class GameRoom extends DurableObject<Env> {
       MAX_START_DELAY,
       Math.max(MIN_START_DELAY, rtt + START_MARGIN),
     )
-    const ball = createServe(Date.now() + delay)
+    const ball = createServe(Date.now() + delay + COUNTDOWN)
     for (const ws of [a, b]) {
       // The serve is created in the serving player's view; the other sees it mirrored
       const serves = this.attachment(ws).serves
