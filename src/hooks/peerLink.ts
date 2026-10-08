@@ -14,6 +14,24 @@ export type PeerMessage = Extract<ClientMessage, { type: 'bat' | 'ball' }>
 // Milliseconds fetched ICE servers are reused, leaving most of the credentials' lifetime for the game
 const ICE_SERVERS_REUSE = (ICE_CREDENTIAL_TTL * 1000) / 4
 
+// One data channel per update type, labelled with it. Both are unordered, so a
+// late update never holds up newer ones. Ball updates are reliable; lost bat
+// updates are dropped instead of retransmitted, and repeated instead.
+const CHANNELS = {
+  bat: { ordered: false, maxRetransmits: 0 },
+  ball: { ordered: false },
+} satisfies Record<PeerMessage['type'], RTCDataChannelInit>
+
+type ChannelKind = keyof typeof CHANNELS
+
+const CHANNEL_KINDS = Object.keys(CHANNELS) as ChannelKind[]
+
+const isChannelKind = (label: string): label is ChannelKind =>
+  Object.hasOwn(CHANNELS, label)
+
+// Milliseconds between repeats of a bat update, since bats only send on a change
+const BAT_REPEAT_GAPS = [20, 40, 90]
+
 let iceServers: { servers: Promise<RTCIceServer[]>; t: number } | undefined
 
 // TURN credentials come from the worker; without them only STUN is used
@@ -68,18 +86,35 @@ export const createPeerLink = ({
   onDirect,
 }: PeerLinkOptions) => {
   let peer: RTCPeerConnection | null = null
-  // Open data channel to the opponent; updates go through the server without one
-  let channel: RTCDataChannel | null = null
-  // The peer's open data channel, kept while the connection briefly drops
-  let peerChannel: RTCDataChannel | null = null
+  // Whether updates use the data channels; they go through the server otherwise
+  let direct = false
+  // The peer's open data channels, kept while the connection briefly drops
+  let openChannels: Partial<Record<ChannelKind, RTCDataChannel>> = {}
   // Bumped when the peer closes, so a connection still waiting for ICE servers is dropped
   let peerVersion = 0
   // Candidates that arrived before the opponent's description
   let pendingCandidates: RTCIceCandidateInit[] = []
+  let batRepeatTimer: ReturnType<typeof setTimeout> | undefined
 
-  const setChannel = (dc: RTCDataChannel | null) => {
-    channel = dc
-    onDirect(dc !== null)
+  const setDirect = (next: boolean) => {
+    direct = next
+    onDirect(next)
+  }
+
+  const allOpen = () =>
+    CHANNEL_KINDS.every((kind) => openChannels[kind]?.readyState === 'open')
+
+  // Stops once a newer bat update is sent or the channel is no longer used
+  const repeatBat = (dc: RTCDataChannel, data: string, index = 0) => {
+    const gap = BAT_REPEAT_GAPS[index] as number | undefined
+    if (gap === undefined) return
+    batRepeatTimer = setTimeout(() => {
+      if (!direct || openChannels.bat !== dc || dc.readyState !== 'open') {
+        return
+      }
+      dc.send(data)
+      repeatBat(dc, data, index + 1)
+    }, gap)
   }
 
   const sendDescription = (connection: RTCPeerConnection) => {
@@ -95,25 +130,30 @@ export const createPeerLink = ({
   }
 
   const closePeer = () => {
-    peerChannel = null
-    setChannel(null)
+    clearTimeout(batRepeatTimer)
+    openChannels = {}
+    setDirect(false)
     pendingCandidates = []
     peer?.close()
     peer = null
     peerVersion++
   }
 
-  // Unordered but reliable, so a late update never holds up newer ones
-  const setupChannel = (connection: RTCPeerConnection, dc: RTCDataChannel) => {
+  const setupChannel = (
+    connection: RTCPeerConnection,
+    dc: RTCDataChannel,
+    kind: ChannelKind,
+  ) => {
     dc.addEventListener('open', () => {
       if (peer !== connection) return
-      peerChannel = dc
+      openChannels[kind] = dc
       if (connection.connectionState === 'disconnected') return
-      setChannel(dc)
+      if (allOpen()) setDirect(true)
     })
     dc.addEventListener('close', () => {
-      if (channel !== dc) return
-      setChannel(null)
+      if (openChannels[kind] !== dc) return
+      delete openChannels[kind]
+      if (direct) setDirect(false)
     })
     dc.addEventListener('message', (event) => {
       if (peer !== connection) return
@@ -152,18 +192,21 @@ export const createPeerLink = ({
           break
         case 'disconnected':
           // Updates go through the server until the connection recovers
-          setChannel(null)
+          setDirect(false)
           break
         case 'connected':
-          if (peerChannel?.readyState === 'open') setChannel(peerChannel)
+          if (allOpen()) setDirect(true)
           break
       }
     })
     if (initiator) {
-      setupChannel(
-        connection,
-        connection.createDataChannel('game', { ordered: false }),
-      )
+      for (const kind of CHANNEL_KINDS) {
+        setupChannel(
+          connection,
+          connection.createDataChannel(kind, CHANNELS[kind]),
+          kind,
+        )
+      }
       connection
         .setLocalDescription()
         .then(() => {
@@ -173,9 +216,9 @@ export const createPeerLink = ({
           // Updates keep going through the server
         })
     } else {
-      connection.addEventListener('datachannel', ({ channel: dc }) =>
-        setupChannel(connection, dc),
-      )
+      connection.addEventListener('datachannel', ({ channel: dc }) => {
+        if (isChannelKind(dc.label)) setupChannel(connection, dc, dc.label)
+      })
     }
     return connection
   }
@@ -222,10 +265,14 @@ export const createPeerLink = ({
     offer: () => void openPeer(true),
     close: closePeer,
     handleSignal: (signal: Signal) => void handleSignal(signal),
-    // False when there is no open data channel, so the caller can use the server
+    // False when the data channels are not in use, so the caller can use the server
     send: (message: PeerMessage) => {
-      if (channel?.readyState !== 'open') return false
-      channel.send(JSON.stringify(message))
+      if (message.type === 'bat') clearTimeout(batRepeatTimer)
+      const dc = openChannels[message.type]
+      if (!direct || dc?.readyState !== 'open') return false
+      const data = JSON.stringify(message)
+      dc.send(data)
+      if (message.type === 'bat') repeatBat(dc, data)
       return true
     },
   }
