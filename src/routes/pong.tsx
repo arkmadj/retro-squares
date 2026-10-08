@@ -1,0 +1,275 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { ArrowButton } from '#/components/common/ArrowButton'
+import { Button } from '#/components/common/Button'
+import { GameMenu } from '#/components/GameMenu'
+import {
+  mirrorBall,
+  receiveBall,
+  useBallMovement,
+} from '#/hooks/useBallMovement'
+import type { LocalBallState } from '#/hooks/useBallMovement'
+import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
+import { useGameRoom } from '#/hooks/useGameRoom'
+import type { RoomStatus } from '#/hooks/useGameRoom'
+import type { BallState, BatState, Direction } from '#/server/messages'
+import { COUNTDOWN, WIN_SCORE } from '#/server/updates'
+
+type PongSearch = { room?: string }
+
+export const Route = createFileRoute('/pong')({
+  validateSearch: (search: Record<string, unknown>): PongSearch => ({
+    room:
+      typeof search.room === 'string' && /^[\w-]{1,64}$/.test(search.room)
+        ? search.room
+        : undefined,
+  }),
+  component: Pong,
+})
+
+const GRID_COLS = 10
+const GRID_ROWS = GRID_COLS * 2
+const BAT_WIDTH = 2.5
+const BAT_HEIGHT = 0.5
+
+const STATUS_TEXT: Record<RoomStatus, string> = {
+  connecting: 'Connecting…',
+  reconnecting: 'Connection lost — reconnecting…',
+  waiting: 'Share this link to invite a player',
+  paired: 'Opponent connected — press Ready to start',
+  playing: 'Game on',
+  full: 'Room full',
+  closed: 'Disconnected',
+}
+
+// Whole seconds left until the serve moves, or 0 once it has
+const useCountdown = (
+  serve: BallState | null,
+  active: boolean,
+  now: () => number,
+) => {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!active || !serve) return
+    const start = serve.t
+    let frame = requestAnimationFrame(tick)
+    function tick() {
+      const left = Math.ceil((start - now()) / 1000)
+      setCount(Math.min(COUNTDOWN / 1000, Math.max(0, left)))
+      if (left > 0) frame = requestAnimationFrame(tick)
+    }
+    return () => cancelAnimationFrame(frame)
+  }, [serve, active, now])
+
+  return active && serve ? count : 0
+}
+
+// Milliseconds the copy result stays on the button
+const COPY_FEEDBACK_TIME = 2000
+
+function CopyLinkButton() {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  )
+
+  useEffect(() => () => clearTimeout(resetTimer.current), [])
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href)
+      setCopied('copied')
+    } catch {
+      setCopied('failed')
+    }
+    clearTimeout(resetTimer.current)
+    resetTimer.current = setTimeout(() => setCopied('idle'), COPY_FEEDBACK_TIME)
+  }
+
+  return (
+    <Button onClick={copy} aria-live="polite" className="text-sm px-4 py-1">
+      {copied === 'copied'
+        ? 'Link copied'
+        : copied === 'failed'
+          ? 'Copy failed — copy the URL'
+          : 'Copy room link'}
+    </Button>
+  )
+}
+
+function Pong() {
+  const { room } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const topBatRef = useRef<HTMLDivElement | null>(null)
+  const bottomBatRef = useRef<HTMLDivElement | null>(null)
+  const ballRef = useRef<HTMLDivElement | null>(null)
+  const opponentBat = useRef<BatState | null>(null)
+  const ballState = useRef<LocalBallState | null>(null)
+
+  useEffect(() => {
+    if (!room) {
+      navigate({
+        search: { room: crypto.randomUUID().slice(0, 8) },
+        replace: true,
+      })
+    }
+  }, [room, navigate])
+
+  // Both players see themselves at the bottom, so the opponent is mirrored
+  const onOpponentBat = useCallback(({ offset, direction, t }: BatState) => {
+    opponentBat.current = {
+      offset: -offset,
+      direction: -direction as Direction,
+      t,
+    }
+  }, [])
+
+  const onBall = useCallback((ball: BallState) => {
+    receiveBall(ballState, mirrorBall(ball))
+  }, [])
+
+  const {
+    status,
+    ready,
+    serve,
+    score,
+    direct,
+    now,
+    sendBat,
+    sendBall,
+    sendReady,
+    sendMiss,
+  } = useGameRoom({
+    roomId: room,
+    onOpponentBat,
+    onBall,
+  })
+
+  const { moveLeft, moveRight } = useBatControls({
+    batRef: bottomBatRef,
+    onChange: sendBat,
+    enabled: status === 'playing',
+  })
+  useRemoteBat({ batRef: topBatRef, batState: opponentBat, now })
+
+  useBallMovement({
+    ballRef,
+    topBatRef,
+    bottomBatRef,
+    ballState,
+    active: status === 'playing',
+    serve,
+    now,
+    onEvent: sendBall,
+    onMiss: sendMiss,
+  })
+
+  const countdown = useCountdown(serve, status === 'playing', now)
+  const winner =
+    score.self >= WIN_SCORE
+      ? 'self'
+      : score.opponent >= WIN_SCORE
+        ? 'opponent'
+        : null
+  const gameOver = status === 'paired' && winner !== null
+  const gameInProgress =
+    status === 'paired' && !gameOver && score.self + score.opponent > 0
+
+  return (
+    <main className="h-svh flex flex-col items-center justify-center gap-2 max-md:py-2">
+      <section
+        className="game-screen mx-auto my-auto outline outline-green-500 relative overflow-hidden"
+        style={
+          {
+            '--grid-cols': GRID_COLS,
+            '--grid-rows': GRID_ROWS,
+            '--bat-width': BAT_WIDTH,
+            '--bat-height': BAT_HEIGHT,
+          } as CSSProperties
+        }
+      >
+        <div className="grid size-full grid-cols-[repeat(var(--grid-cols),minmax(0,1fr))] grid-rows-[repeat(var(--grid-rows),minmax(0,1fr))]">
+          {Array.from({ length: GRID_COLS * GRID_ROWS }, (_, i) => (
+            <div key={i} className="border border-green-500/20" />
+          ))}
+        </div>
+        <div
+          ref={topBatRef}
+          data-id="top-bat"
+          className="bg-green-500 absolute top-0 w-[calc(100%/var(--grid-cols)*var(--bat-width))] h-[calc(100%/var(--grid-rows)*var(--bat-height))] left-1/2 -translate-x-1/2 rounded-full will-change-transform"
+        />
+        <div
+          ref={bottomBatRef}
+          data-id="bottom-bat"
+          className="bg-green-500 absolute bottom-0 w-[calc(100%/var(--grid-cols)*var(--bat-width))] h-[calc(100%/var(--grid-rows)*var(--bat-height))] left-1/2 -translate-x-1/2 rounded-full will-change-transform"
+        />
+        <div
+          ref={ballRef}
+          data-id="ball"
+          className="h-[calc(100%/var(--grid-rows)*var(--bat-height))] aspect-square bg-green-500 absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 rounded-full"
+        />
+        <div
+          aria-label={`Score: you ${score.self}, opponent ${score.opponent}`}
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4 font-mono text-2xl font-bold text-green-500/60"
+        >
+          <span>{score.opponent}</span>
+          <span>{score.self}</span>
+        </div>
+        <GameMenu
+          open={status !== 'playing'}
+          title={
+            gameOver ? (winner === 'self' ? 'You win' : 'You lose') : undefined
+          }
+          waiting={
+            status === 'connecting' ||
+            status === 'reconnecting' ||
+            (status === 'paired' && ready.self)
+          }
+          message={
+            <>
+              {status === 'paired' && ready.self
+                ? 'Waiting for opponent to be ready'
+                : gameOver
+                  ? `Final score ${score.self}–${score.opponent} — press Rematch to play again`
+                  : STATUS_TEXT[status]}
+              {gameInProgress && (
+                <span>
+                  Score: you {score.self} – {score.opponent} opponent
+                </span>
+              )}
+              {status === 'paired' && !gameOver && (
+                <span>First to {WIN_SCORE} points wins</span>
+              )}
+            </>
+          }
+        >
+          {status === 'waiting' && <CopyLinkButton />}
+          {status === 'paired' && !ready.self && (
+            <Button onClick={sendReady} className="text-sm px-4 py-1">
+              {gameOver ? 'Rematch' : 'Ready'}
+              {ready.opponent && ' (opponent is ready)'}
+            </Button>
+          )}
+        </GameMenu>
+        <GameMenu
+          open={status === 'playing' && countdown > 0}
+          message="Get ready"
+        >
+          <p aria-live="assertive" className="text-6xl font-bold">
+            {countdown}
+          </p>
+        </GameMenu>
+      </section>
+      <div className="hidden pointer-coarse:flex justify-between game-width">
+        <ArrowButton label="Move left" onPress={moveLeft}>
+          ←
+        </ArrowButton>
+        <ArrowButton label="Move right" onPress={moveRight}>
+          →
+        </ArrowButton>
+      </div>
+    </main>
+  )
+}
