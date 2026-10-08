@@ -43,7 +43,7 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
   if (!mounted) return null
 
   const {
-    title = 'Retro Squares',
+    title = 'Pong',
     message,
     waiting = false,
     children,

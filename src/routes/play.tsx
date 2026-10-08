@@ -36,7 +36,7 @@ const BAT_HEIGHT = 0.5
 const STATUS_TEXT: Record<RoomStatus, string> = {
   connecting: 'Connecting…',
   reconnecting: 'Connection lost — reconnecting…',
-  waiting: 'Waiting for player 2 — share this link',
+  waiting: 'Share this link to invite a player',
   paired: 'Opponent connected — press Ready to start',
   playing: 'Game on',
   full: 'Room full',
@@ -205,7 +205,6 @@ function Play() {
           waiting={
             status === 'connecting' ||
             status === 'reconnecting' ||
-            status === 'waiting' ||
             (status === 'paired' && ready.self)
           }
           message={
