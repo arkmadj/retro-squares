@@ -7,11 +7,13 @@ import {
   parseBat,
   parseJson,
   ROOM_FULL_CODE,
+  WIN_SCORE,
 } from '#/server/updates'
 import type {
   BallState,
   BatState,
   Player,
+  Score,
   ServerMessage,
   Signal,
 } from '#/server/messages'
@@ -43,6 +45,8 @@ type Attachment = {
   ready: boolean
   // Whether this player serves when the next round starts
   serves: boolean
+  // Points won in the current game
+  score: number
   rtt?: number
   location?: Location
 }
@@ -179,6 +183,7 @@ export class GameRoom extends DurableObject<Env> {
       ready: false,
       // The host serves first in every new game
       serves: player === 0,
+      score: 0,
       location,
     } satisfies Attachment)
 
@@ -298,17 +303,26 @@ export class GameRoom extends DurableObject<Env> {
     if (opponentReady) this.startRound(ws, opponent)
   }
 
-  // The round is over, so both players start the next one from the centre
-  // and the player who missed serves it
+  // The round is over, so the opponent scores, both players start the next
+  // one from the centre and the player who missed serves it
   private onMiss(ws: WebSocket, opponent: WebSocket) {
+    this.update(opponent, { score: this.attachment(opponent).score + 1 })
     for (const player of [ws, opponent]) {
       this.resetPlayer(player, player === ws)
-      this.send(player, { type: 'reset' })
     }
+    this.send(ws, { type: 'reset', score: this.scoreOf(ws, opponent) })
+    this.send(opponent, { type: 'reset', score: this.scoreOf(opponent, ws) })
   }
 
   // Both players get the same serve and start time, so the round starts together
   private startRound(a: WebSocket, b: WebSocket) {
+    // The last game was won, so this round starts a new one
+    if (
+      this.attachment(a).score >= WIN_SCORE ||
+      this.attachment(b).score >= WIN_SCORE
+    ) {
+      for (const ws of [a, b]) this.update(ws, { score: 0 })
+    }
     const rtt = Math.max(
       this.attachment(a).rtt ?? MAX_START_DELAY,
       this.attachment(b).rtt ?? MAX_START_DELAY,
@@ -318,10 +332,24 @@ export class GameRoom extends DurableObject<Env> {
       Math.max(MIN_START_DELAY, rtt + START_MARGIN),
     )
     const ball = createServe(Date.now() + delay + COUNTDOWN)
-    for (const ws of [a, b]) {
+    for (const [ws, other] of [
+      [a, b],
+      [b, a],
+    ]) {
       // The serve is created in the serving player's view; the other sees it mirrored
       const serves = this.attachment(ws).serves
-      this.send(ws, { type: 'start', ball: serves ? ball : mirrorBall(ball) })
+      this.send(ws, {
+        type: 'start',
+        ball: serves ? ball : mirrorBall(ball),
+        score: this.scoreOf(ws, other),
+      })
+    }
+  }
+
+  private scoreOf(ws: WebSocket, opponent: WebSocket): Score {
+    return {
+      self: this.attachment(ws).score,
+      opponent: this.attachment(opponent).score,
     }
   }
 
@@ -347,6 +375,7 @@ export class GameRoom extends DurableObject<Env> {
     const opponent = this.opponentOf(ws)
     if (!opponent) return
     // The next opponent starts a fresh game, so both must ready up again
+    this.update(opponent, { score: 0 })
     this.resetPlayer(opponent, this.attachment(opponent).player === 0)
     this.send(opponent, { type: 'opponent', connected: false })
   }

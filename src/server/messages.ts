@@ -18,6 +18,9 @@ export type BallState = {
   t: number
 }
 
+// Points in the current game, in this player's view
+export type Score = { self: number; opponent: number }
+
 // WebRTC negotiation relayed between players so they can connect directly
 export type Signal =
   | { kind: 'description'; type: 'offer' | 'answer'; sdp: string }
@@ -46,6 +49,7 @@ export type ServerMessage =
   | ({ type: 'ball' } & BallState)
   | { type: 'ready'; self: boolean; opponent: boolean }
   // The round's serve in this player's view; the ball moves from `ball.t`
-  | { type: 'start'; ball: BallState }
-  | { type: 'reset' }
+  | { type: 'start'; ball: BallState; score: Score }
+  // The round is over; the game is over once either score reaches WIN_SCORE
+  | { type: 'reset'; score: Score }
   | { type: 'signal'; signal: Signal }

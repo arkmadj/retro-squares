@@ -14,7 +14,7 @@ import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
 import type { BallState, BatState, Direction } from '#/server/messages'
-import { COUNTDOWN } from '#/server/updates'
+import { COUNTDOWN, WIN_SCORE } from '#/server/updates'
 
 type PongSearch = { room?: string }
 
@@ -134,6 +134,7 @@ function Pong() {
     status,
     ready,
     serve,
+    score,
     direct,
     now,
     sendBat,
@@ -166,6 +167,15 @@ function Pong() {
   })
 
   const countdown = useCountdown(serve, status === 'playing', now)
+  const winner =
+    score.self >= WIN_SCORE
+      ? 'self'
+      : score.opponent >= WIN_SCORE
+        ? 'opponent'
+        : null
+  const gameOver = status === 'paired' && winner !== null
+  const gameInProgress =
+    status === 'paired' && !gameOver && score.self + score.opponent > 0
 
   return (
     <main className="h-svh flex flex-col items-center justify-center gap-2 max-md:py-2">
@@ -200,8 +210,18 @@ function Pong() {
           data-id="ball"
           className="h-[calc(100%/var(--grid-rows)*var(--bat-height))] aspect-square bg-green-500 absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 rounded-full"
         />
+        <div
+          aria-label={`Score: you ${score.self}, opponent ${score.opponent}`}
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4 font-mono text-2xl font-bold text-green-500/60"
+        >
+          <span>{score.opponent}</span>
+          <span>{score.self}</span>
+        </div>
         <GameMenu
           open={status !== 'playing'}
+          title={
+            gameOver ? (winner === 'self' ? 'You win' : 'You lose') : undefined
+          }
           waiting={
             status === 'connecting' ||
             status === 'reconnecting' ||
@@ -211,14 +231,25 @@ function Pong() {
             <>
               {status === 'paired' && ready.self
                 ? 'Waiting for opponent to be ready'
-                : STATUS_TEXT[status]}
+                : gameOver
+                  ? `Final score ${score.self}–${score.opponent} — press Rematch to play again`
+                  : STATUS_TEXT[status]}
+              {gameInProgress && (
+                <span>
+                  Score: you {score.self} – {score.opponent} opponent
+                </span>
+              )}
+              {status === 'paired' && !gameOver && (
+                <span>First to {WIN_SCORE} points wins</span>
+              )}
             </>
           }
         >
           {status === 'waiting' && <CopyLinkButton />}
           {status === 'paired' && !ready.self && (
             <Button onClick={sendReady} className="text-sm px-4 py-1">
-              Ready{ready.opponent && ' (opponent is ready)'}
+              {gameOver ? 'Rematch' : 'Ready'}
+              {ready.opponent && ' (opponent is ready)'}
             </Button>
           )}
         </GameMenu>

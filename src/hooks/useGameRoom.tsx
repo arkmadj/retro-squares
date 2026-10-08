@@ -7,6 +7,7 @@ import type {
   BatState,
   ClientMessage,
   Player,
+  Score,
   ServerMessage,
 } from '#/server/messages'
 import { parseJson, ROOM_FULL_CODE } from '#/server/updates'
@@ -23,6 +24,8 @@ export type RoomStatus =
 export type ReadyState = { self: boolean; opponent: boolean }
 
 const NOT_READY: ReadyState = { self: false, opponent: false }
+
+const NO_SCORE: Score = { self: 0, opponent: 0 }
 
 type UseGameRoomOptions = {
   roomId: string | undefined
@@ -57,6 +60,7 @@ export const useGameRoom = ({
   const [ready, setReady] = useState<ReadyState>(NOT_READY)
   // The server's serve for the current round, in this player's view
   const [serve, setServe] = useState<BallState | null>(null)
+  const [score, setScore] = useState<Score>(NO_SCORE)
   // Whether bat and ball updates go directly to the opponent
   const [direct, setDirect] = useState(false)
 
@@ -218,6 +222,7 @@ export const useGameRoom = ({
           setPlayer(message.player)
           setStatus('waiting')
           setReady(NOT_READY)
+          setScore(NO_SCORE)
           break
         case 'pong':
           clock.pong(message)
@@ -226,6 +231,7 @@ export const useGameRoom = ({
           endRound()
           setStatus(message.connected ? 'paired' : 'waiting')
           setReady(NOT_READY)
+          setScore(NO_SCORE)
           centreOpponentBat()
           if (message.connected && self === 0) {
             peer.offer()
@@ -240,12 +246,14 @@ export const useGameRoom = ({
           // The ball waits at the centre until the server's start time
           startRound()
           setServe(message.ball)
+          setScore(message.score)
           setStatus('playing')
           break
         case 'reset':
           endRound()
           setStatus('paired')
           setReady(NOT_READY)
+          setScore(message.score)
           centreOpponentBat()
           break
         case 'bat': {
@@ -326,6 +334,7 @@ export const useGameRoom = ({
     player,
     ready,
     serve,
+    score,
     direct,
     now,
     sendBat,

@@ -7,6 +7,7 @@ Retro Squares is a two-player, real-time retro bat-and-ball game built with TanS
 1. Open `/pong` — a new room is created and its ID is added to the URL.
 2. Share the link with a second player.
 3. Move your bat with the `←` / `→` arrow keys or `A` / `D`. On touch devices, hold the on-screen `←` / `→` buttons.
+4. When a player misses the ball, the other player scores a point. The first player to 5 points wins; both players press Rematch to start a new game.
 
 # Getting Started
 
