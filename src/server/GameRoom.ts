@@ -71,16 +71,16 @@ const BUDGETED_TYPES = new Set(['bat', 'ball', 'signal'])
 
 type Budget = { tokens: number; t: number }
 
-// Direction is a unit vector in screen-height units
+// Direction is a unit vector in screen-height units. In the serving player's
+// view the ball heads up, away from their bat and towards the opponent.
 const createServe = (t: number): BallState => {
   const angle = (Math.random() * 2 - 1) * MAX_SERVE_ANGLE
-  const vertical = Math.random() < 0.5 ? -1 : 1
   return {
     seq: 1,
     x: 0,
     y: 0,
     dx: Math.sin(angle),
-    dy: Math.cos(angle) * vertical,
+    dy: -Math.cos(angle),
     t,
   }
 }
