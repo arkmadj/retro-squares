@@ -66,6 +66,39 @@ const useCountdown = (
   return active && serve ? count : 0
 }
 
+// Milliseconds the copy result stays on the button
+const COPY_FEEDBACK_TIME = 2000
+
+function CopyLinkButton() {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  )
+
+  useEffect(() => () => clearTimeout(resetTimer.current), [])
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href)
+      setCopied('copied')
+    } catch {
+      setCopied('failed')
+    }
+    clearTimeout(resetTimer.current)
+    resetTimer.current = setTimeout(() => setCopied('idle'), COPY_FEEDBACK_TIME)
+  }
+
+  return (
+    <Button onClick={copy} aria-live="polite" className="text-sm px-4 py-1">
+      {copied === 'copied'
+        ? 'Link copied'
+        : copied === 'failed'
+          ? 'Copy failed — copy the URL'
+          : 'Copy room link'}
+    </Button>
+  )
+}
+
 function Play() {
   const { room } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
@@ -183,6 +216,7 @@ function Play() {
             </>
           }
         >
+          {status === 'waiting' && <CopyLinkButton />}
           {status === 'paired' && !ready.self && (
             <Button onClick={sendReady} className="text-sm px-4 py-1">
               Ready{ready.opponent && ' (opponent is ready)'}
