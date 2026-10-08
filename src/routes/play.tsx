@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { ArrowButton } from '#/components/common/ArrowButton'
+import { Button } from '#/components/common/Button'
+import { GameMenu } from '#/components/GameMenu'
 import {
   mirrorBall,
   receiveBall,
@@ -86,7 +89,7 @@ function Play() {
     onBall,
   })
 
-  useBatControls({
+  const { moveLeft, moveRight } = useBatControls({
     batRef: bottomBatRef,
     onChange: sendBat,
     enabled: status === 'playing',
@@ -106,23 +109,7 @@ function Play() {
   })
 
   return (
-    <main className="h-dvh flex flex-col items-center justify-center gap-2">
-      <p className="text-green-500 text-sm font-mono">
-        {status === 'paired' && ready.self
-          ? 'Waiting for opponent to be ready'
-          : STATUS_TEXT[status]}
-        {(status === 'paired' || status === 'playing') &&
-          (direct ? ' · direct' : ' · relayed')}
-      </p>
-      {status === 'paired' && !ready.self && (
-        <button
-          type="button"
-          onClick={sendReady}
-          className="text-green-500 text-sm font-mono outline outline-green-500 px-4 py-1 hover:bg-green-500 hover:text-black"
-        >
-          Ready{ready.opponent && ' (opponent is ready)'}
-        </button>
-      )}
+    <main className="h-svh flex flex-col items-center justify-center gap-2 max-md:py-2">
       <section
         className="game-screen mx-auto my-auto outline outline-green-500 relative overflow-hidden"
         style={
@@ -154,7 +141,38 @@ function Play() {
           data-id="ball"
           className="h-[calc(100%/var(--grid-rows)*var(--bat-height))] aspect-square bg-green-500 absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 rounded-full"
         />
+        {status !== 'playing' && (
+          <GameMenu
+            waiting={
+              status === 'connecting' ||
+              status === 'reconnecting' ||
+              status === 'waiting' ||
+              (status === 'paired' && ready.self)
+            }
+            message={
+              <>
+                {status === 'paired' && ready.self
+                  ? 'Waiting for opponent to be ready'
+                  : STATUS_TEXT[status]}
+              </>
+            }
+          >
+            {status === 'paired' && !ready.self && (
+              <Button onClick={sendReady} className="text-sm px-4 py-1">
+                Ready{ready.opponent && ' (opponent is ready)'}
+              </Button>
+            )}
+          </GameMenu>
+        )}
       </section>
+      <div className="hidden pointer-coarse:flex justify-between game-width">
+        <ArrowButton label="Move left" onPress={moveLeft}>
+          ←
+        </ArrowButton>
+        <ArrowButton label="Move right" onPress={moveRight}>
+          →
+        </ArrowButton>
+      </div>
     </main>
   )
 }

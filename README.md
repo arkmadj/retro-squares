@@ -6,7 +6,7 @@ Retro Squares is a two-player, real-time retro bat-and-ball game built with TanS
 
 1. Open `/play` — a new room is created and its ID is added to the URL.
 2. Share the link with a second player.
-3. Move your bat with the `←` / `→` arrow keys or `A` / `D`.
+3. Move your bat with the `←` / `→` arrow keys or `A` / `D`. On touch devices, hold the on-screen `←` / `→` buttons.
 
 # Getting Started
 

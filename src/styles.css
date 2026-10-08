@@ -19,3 +19,13 @@ body {
   aspect-ratio: 1 / 2;
   width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 2rem) / 2));
 }
+
+.game-width {
+  width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 2rem) / 2))
+}
+
+@media (pointer: coarse) {
+  .game-screen {
+    width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 8rem) / 2));
+  }
+}
