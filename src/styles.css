@@ -21,7 +21,7 @@ body {
 }
 
 .game-width {
-  width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 2rem) / 2))
+  width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 2rem) / 2));
 }
 
 @media (pointer: coarse) {
@@ -88,5 +88,177 @@ body {
 
   .game-menu[data-state='closed'] {
     animation-delay: 0ms;
+  }
+}
+
+/* Homepage: CRT backdrop, board grid and vignette behind the content */
+.home-crt {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    linear-gradient(rgb(34 197 94 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 197 94 / 0.06) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+  background-position: center;
+}
+
+.home-crt::before,
+.home-crt::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.home-crt::before {
+  z-index: -1;
+  background: radial-gradient(ellipse at center, transparent 40%, black 100%);
+}
+
+.home-crt::after {
+  z-index: 10;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgb(0 0 0 / 0.25) 2px 3px
+  );
+}
+
+.home-enter {
+  animation: home-enter 500ms ease-out calc(var(--enter-index) * 150ms) both;
+}
+
+.home-glow {
+  text-shadow:
+    0 0 4px rgb(34 197 94 / 0.8),
+    0 0 16px rgb(34 197 94 / 0.5);
+}
+
+.home-flicker {
+  animation: home-flicker 6s linear infinite;
+}
+
+/* Each logo square lights up in turn */
+.home-logo-cell {
+  animation: home-logo-cell 2.4s ease-out calc(var(--cell-index) * 300ms)
+    infinite;
+}
+
+.home-blink {
+  animation: home-blink 1s steps(1) infinite;
+}
+
+.home-card {
+  box-shadow:
+    0 0 12px rgb(34 197 94 / 0.35),
+    inset 0 0 12px rgb(34 197 94 / 0.15);
+}
+
+/* Pong demo: the ball bounces between the bats, which track it across */
+.home-pong {
+  --ball-size: 0.5rem;
+  --bat-height: 0.375rem;
+  background-image:
+    linear-gradient(rgb(34 197 94 / 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 197 94 / 0.15) 1px, transparent 1px);
+  background-size: 1rem 1rem;
+}
+
+.home-pong-bat,
+.home-pong-ball {
+  position: absolute;
+  translate: -50% 0;
+  border-radius: 9999px;
+  background: rgb(34 197 94);
+  box-shadow: 0 0 6px rgb(34 197 94);
+  animation: home-pong-x 3.4s linear infinite alternate;
+}
+
+.home-pong-bat {
+  width: 22%;
+  height: var(--bat-height);
+}
+
+.home-pong-ball {
+  width: var(--ball-size);
+  height: var(--ball-size);
+  animation:
+    home-pong-x 3.4s linear infinite alternate,
+    home-pong-y 1s linear infinite alternate;
+}
+
+@keyframes home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+@keyframes home-flicker {
+  0%,
+  91%,
+  93%,
+  95%,
+  100% {
+    opacity: 1;
+  }
+  92%,
+  94% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes home-logo-cell {
+  0% {
+    background-color: rgb(34 197 94);
+    box-shadow: 0 0 8px rgb(34 197 94);
+  }
+  40% {
+    box-shadow: none;
+  }
+}
+
+@keyframes home-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes home-pong-x {
+  from {
+    left: 15%;
+  }
+  to {
+    left: 85%;
+  }
+}
+
+@keyframes home-pong-y {
+  from {
+    top: var(--bat-height);
+  }
+  to {
+    top: calc(100% - var(--bat-height) - var(--ball-size));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-enter,
+  .home-flicker,
+  .home-logo-cell,
+  .home-blink,
+  .home-pong-bat,
+  .home-pong-ball {
+    animation: none;
+  }
+
+  .home-pong-bat,
+  .home-pong-ball {
+    left: 50%;
+  }
+
+  .home-pong-ball {
+    top: 50%;
+    translate: -50% -50%;
   }
 }
