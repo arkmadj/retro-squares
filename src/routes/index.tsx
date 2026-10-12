@@ -63,6 +63,54 @@ function Home() {
           Move with ← / → or A / D. On touch, hold the on-screen arrows.
         </p>
       </section>
+
+      <section
+        aria-labelledby="coming-soon-title"
+        className="home-enter game-width flex flex-col gap-3"
+        style={{ '--enter-index': 2 } as CSSProperties}
+      >
+        <h2
+          id="coming-soon-title"
+          className="text-sm uppercase tracking-widest text-green-500/70"
+        >
+          Coming soon
+        </h2>
+        <ul className="flex flex-col gap-2">
+          {COMING_SOON.map((game) => (
+            <li
+              key={game.name}
+              className="flex items-center justify-between gap-4 px-4 py-3 text-left outline outline-dashed outline-green-500/40"
+            >
+              <div className="flex flex-col gap-1">
+                <span className="font-bold uppercase tracking-widest text-green-500/80">
+                  {game.name}
+                </span>
+                <span className="text-xs text-green-500/60">
+                  {game.description}
+                </span>
+              </div>
+              <span className="shrink-0 text-xs uppercase text-green-500/50">
+                Soon
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </main>
   )
 }
+
+const COMING_SOON = [
+  {
+    name: 'Light Cycles',
+    description: 'Box in your opponent with your trail',
+  },
+  {
+    name: 'Snake Duel',
+    description: 'Grow longer, cut them off, survive',
+  },
+  {
+    name: 'Breakout Battle',
+    description: 'Race to clear your wall first',
+  },
+]
