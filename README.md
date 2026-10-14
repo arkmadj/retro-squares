@@ -1,17 +1,40 @@
 # Retro Squares
 
-Retro Squares is a two-player, real-time retro bat-and-ball game built with TanStack Start and Cloudflare Workers. Each game room is backed by a Durable Object that relays bat and ball positions between players over WebSockets.
+Retro Squares is a collection of real-time, two-player retro games with a green-on-black CRT look. It's built with TanStack Start and runs on Cloudflare Workers.
 
-## How To Play
+## Games
 
-1. Open `/pong` — a new room is created and its ID is added to the URL.
+- **Pong** — playable now. A bat-and-ball game where the first player to 5 points wins.
+- **Coming soon:** Light Cycles, Snake Duel and Breakout Battle.
+
+## How To Play Pong
+
+1. Open the home page and press **Play**, or go to `/pong`. A new room is created and its ID is added to the URL.
 2. Share the link with a second player.
-3. Move your bat with the `←` / `→` arrow keys or `A` / `D`. On touch devices, hold the on-screen `←` / `→` buttons.
-4. When a player misses the ball, the other player scores a point. The first player to 5 points wins; both players press Rematch to start a new game.
+3. Move your bat with `←` / `→` or `A` / `D`. On touch devices, hold the on-screen `←` / `→` buttons.
+4. When a player misses the ball, the other player scores a point. The first to 5 points wins, and both players press **Rematch** to start a new game.
 
-# Getting Started
+## How It Works
 
-To run Retro Squares locally:
+- **Game rooms.** Each room is a Cloudflare Durable Object (`GameRoom`). Players join over a WebSocket at `/ws/{room}`.
+- **Fair placement.** When both players have joined, the lobby picks the Cloudflare region whose distance to the further player is smallest. Both players then move to a room in that region at `/ws/{room}/{region}`, so neither has a latency advantage.
+- **Peer-to-peer updates.** Players use the room to exchange WebRTC signalling, then send bat and ball updates to each other over data channels. Bat updates are unordered and are not retransmitted; ball updates are unordered but reliable. When a direct connection isn't available, updates go through the room's WebSocket instead.
+- **Clock sync.** Clients ping the room to estimate the server clock and round-trip time. The room uses these estimates to schedule each serve so both players see it start at the same moment.
+- **NAT traversal.** The worker serves ICE servers to the browser. It uses STUN by default and adds Cloudflare TURN when TURN credentials are set.
+
+## Project Structure
+
+```
+src/
+  routes/          Home page (index.tsx) and the Pong game (pong.tsx)
+  components/      Game menu and shared buttons
+  hooks/           Room connection, WebRTC peer link, clock sync, bat and ball movement
+  server/          GameRoom Durable Object, message types and update parsing
+  server.ts        Worker entry: ICE servers, WebSocket routing, app handler
+wrangler.jsonc     Worker and Durable Object configuration
+```
+
+## Getting Started
 
 ```bash
 npm install
@@ -20,201 +43,44 @@ npm run dev
 
 The app runs at http://localhost:3000.
 
-# Building For Production
+### TURN (optional)
 
-To build this application for production:
+Players behind strict NATs may need TURN to connect directly. Create a TURN key in the Cloudflare dashboard (**Realtime > TURN**) and add it to `.dev.vars` for local development:
 
-```bash
-npm run build
+```
+TURN_KEY_ID=...
+TURN_KEY_API_TOKEN=...
 ```
 
-## Styling
+Without these, only STUN is used, and players who can't connect directly play through the room's WebSocket.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## Scripts
 
-### Removing Tailwind CSS
+| Command              | Description                                   |
+| -------------------- | --------------------------------------------- |
+| `npm run dev`        | Start the dev server on port 3000             |
+| `npm run build`      | Build for production                          |
+| `npm run preview`    | Preview the production build                  |
+| `npm run deploy`     | Build and deploy to Cloudflare Workers        |
+| `npm run lint`       | Run ESLint                                    |
+| `npm run format`     | Format with Prettier and fix lint issues      |
+| `npm run check`      | Check formatting                              |
+| `npm run cf-typegen` | Regenerate Worker types from `wrangler.jsonc` |
 
-If you prefer not to use Tailwind CSS:
+## Deploying
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
+1. Log in to Cloudflare with `npx wrangler login`.
+2. Optionally, set the TURN secrets:
+   ```bash
+   npx wrangler secret put TURN_KEY_ID
+   npx wrangler secret put TURN_KEY_API_TOKEN
+   ```
+3. Run `npm run deploy`.
 
-## Linting & Formatting
+## Tech Stack
 
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
-
-```bash
-npm run lint
-npm run format
-npm run check
-```
-
-
-## Deploy to Cloudflare Workers
-
-This project uses the Cloudflare Vite plugin (configured in `vite.config.ts`) and `wrangler.jsonc`:
-
-1. Install Wrangler: `npm install -g wrangler`
-2. Authenticate: `wrangler login`
-3. Deploy: `npx wrangler deploy`
-
-For production env vars, run `wrangler secret put MY_VAR` for each secret listed in `.env.example`. Public (non-secret) vars go in `wrangler.jsonc` under `vars`.
-
-To let players behind strict NATs connect through TURN, create a TURN key in the Cloudflare dashboard (Realtime > TURN) and set `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` with `wrangler secret put` (or in `.dev.vars` locally). Without them, only STUN is used.
-
-KV, D1, R2, and Durable Object bindings are configured in `wrangler.jsonc` — see https://developers.cloudflare.com/workers/wrangler/configuration/.
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Retro Squares' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- [TanStack Start](https://tanstack.com/start) and [TanStack Router](https://tanstack.com/router) with file-based routing
+- React 19
+- [Tailwind CSS](https://tailwindcss.com/) v4
+- Cloudflare Workers and Durable Objects, through the Cloudflare Vite plugin
+- WebRTC data channels for peer-to-peer game updates
