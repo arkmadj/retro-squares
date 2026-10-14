@@ -2,6 +2,8 @@
 
 Retro Squares is a collection of real-time, two-player retro games with a green-on-black CRT look. It's built with TanStack Start and runs on Cloudflare Workers.
 
+**Live demo:** https://retro-squares.ahmadjinadu.com
+
 ## Games
 
 - **Pong** — playable now. A bat-and-ball game where the first player to 5 points wins.
