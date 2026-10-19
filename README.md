@@ -11,10 +11,11 @@ Retro Squares is a collection of real-time, two-player retro games with a green-
 
 ## How To Play Pong
 
-1. Open the home page and press **Play**, or go to `/pong`. A new room is created and its ID is added to the URL.
-2. Share the link with a second player.
+1. Open the home page and press **Play**, or go to `/pong`.
+2. Press **Create room** and share the link or the room code with a second player. They can open the link, or press **Join room** and enter the code (or paste the link).
 3. Move your bat with `←` / `→` or `A` / `D`. On touch devices, hold the on-screen `←` / `→` buttons.
 4. When a player misses the ball, the other player scores a point. The first to 5 points wins, and both players press **Rematch** to start a new game.
+5. Press **Leave room** at any time to go back to the menu. During a game you have to press it twice, because leaving ends the game for your opponent.
 
 ## How It Works
 

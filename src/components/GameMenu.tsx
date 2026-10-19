@@ -60,26 +60,31 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
         if (!open && event.target === event.currentTarget) setMounted(false)
       }}
       style={{ '--menu-items': hasChildren ? 3 : 2 } as CSSProperties}
-      className="game-menu absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-black/80 p-4 text-center font-mono text-green-500"
+      className="game-menu absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4 text-center font-mono text-green-500"
     >
-      <h2
-        style={itemStyle(0)}
-        className="game-menu-item text-2xl font-bold uppercase tracking-widest"
-      >
-        {title}
-      </h2>
-      <p
-        style={itemStyle(1)}
-        className="game-menu-item text-sm flex items-center gap-2 flex-col"
-      >
-        {message}
-        {waiting && <WaitingIcon />}
-      </p>
-      {hasChildren && (
-        <div style={itemStyle(2)} className="game-menu-item">
-          {children}
+      <div className="game-menu-panel flex w-full flex-col items-center gap-4 bg-black/90 px-4 py-6 outline outline-green-500">
+        <h2
+          style={itemStyle(0)}
+          className="game-menu-item game-menu-glow text-2xl font-bold uppercase tracking-widest"
+        >
+          {title}
+        </h2>
+        <div
+          style={itemStyle(1)}
+          className="game-menu-item flex flex-col items-center gap-2 text-sm"
+        >
+          {message}
+          {waiting && <WaitingIcon />}
         </div>
-      )}
+        {hasChildren && (
+          <div
+            style={itemStyle(2)}
+            className="game-menu-item flex w-full flex-col items-stretch gap-2"
+          >
+            {children}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
