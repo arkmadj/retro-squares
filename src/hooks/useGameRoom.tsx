@@ -63,6 +63,8 @@ export const useGameRoom = ({
   const [score, setScore] = useState<Score>(NO_SCORE)
   // Whether bat and ball updates go directly to the opponent
   const [direct, setDirect] = useState(false)
+  // Bumped to open a new session in the same room after it closed
+  const [session, setSession] = useState(0)
 
   useEffect(() => {
     onOpponentBatRef.current = onOpponentBat
@@ -76,11 +78,16 @@ export const useGameRoom = ({
   const now = useCallback(() => performance.now() + clockOffset.current, [])
 
   useEffect(() => {
+    // Nothing from the previous room carries over, including leaving to no room
+    setStatus('connecting')
+    setReady(NOT_READY)
+    setScore(NO_SCORE)
+    setServe(null)
+    setPlayer(null)
+    onOpponentBatRef.current({ offset: 0, direction: 0, t: now() })
     if (!roomId) return
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-    setStatus('connecting')
-    setReady(NOT_READY)
 
     let ws: WebSocket
     // Cleared on cleanup so this effect's sockets stop touching shared state
@@ -296,7 +303,9 @@ export const useGameRoom = ({
       socket.current = null
       ws.close()
     }
-  }, [roomId, now])
+  }, [roomId, session, now])
+
+  const retry = useCallback(() => setSession((value) => value + 1), [])
 
   const send = useCallback((message: ClientMessage) => {
     const ws = socket.current
@@ -341,5 +350,6 @@ export const useGameRoom = ({
     sendBall,
     sendReady,
     sendMiss,
+    retry,
   }
 }
