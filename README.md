@@ -4,6 +4,10 @@ Retro Squares is a collection of real-time, two-player retro games with a green-
 
 **Live demo:** https://retro-squares.ahmadjinadu.com
 
+<p align="center">
+  <img src="docs/pong.gif" alt="Two players rallying in Pong, with a countdown before each serve and the score updating" width="284" />
+</p>
+
 ## Games
 
 - **Pong** — playable now. A bat-and-ball game where the first player to 5 points wins.
