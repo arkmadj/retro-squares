@@ -27,6 +27,8 @@ const DEFAULT_RIGHT_KEYS = ['ArrowRight', 'd', 'D']
 // Seconds for a correction to shrink by about two thirds
 const SMOOTHING = 0.08
 
+const isTypingTarget = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+
 // Offset is from the centre of the game screen, as a fraction of its width
 export const setBatOffset = (bat: HTMLElement, offset: number) => {
   const container = bat.parentElement
@@ -151,6 +153,7 @@ export const useBatControls = ({
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return
       const active = event.type === 'keydown'
       if (leftKeys.includes(event.key)) {
         event.preventDefault()
