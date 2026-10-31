@@ -1,6 +1,7 @@
-import type { ButtonHTMLAttributes, CSSProperties } from 'react'
+import type { ComponentProps, CSSProperties } from 'react'
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+// ComponentProps includes ref, so callers can focus the button
+type ButtonProps = ComponentProps<'button'> & {
   className?: string
   style?: CSSProperties
   // Primary is filled, for the main action in a menu
