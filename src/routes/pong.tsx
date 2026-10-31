@@ -27,8 +27,9 @@ const isRoomId = (value: unknown): value is string =>
 const createRoomId = () => crypto.randomUUID().slice(0, 8)
 
 // Accepts a room code or a shared room link
+// Codes are only made in lower case, so capitals typed by a player still match
 const parseRoomInput = (input: string) => {
-  const text = input.trim()
+  const text = input.trim().toLowerCase()
   if (isRoomId(text)) return text
   try {
     const room = new URL(text, location.origin).searchParams.get('room')
@@ -117,6 +118,61 @@ function CopyLinkButton() {
         : copied === 'failed'
           ? 'Copy failed'
           : 'Copy room link'}
+    </Button>
+  )
+}
+
+const COPY_LABELS = {
+  idle: 'Copy room code',
+  copied: 'Room code copied',
+  failed: 'Copy failed',
+}
+
+function CopyCodeButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  )
+
+  useEffect(() => () => clearTimeout(resetTimer.current), [])
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied('copied')
+    } catch {
+      setCopied('failed')
+    }
+    clearTimeout(resetTimer.current)
+    resetTimer.current = setTimeout(() => setCopied('idle'), COPY_FEEDBACK_TIME)
+  }
+
+  return (
+    <Button
+      onClick={copy}
+      aria-label={COPY_LABELS[copied]}
+      title={COPY_LABELS[copied]}
+      className="p-1"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        className="size-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        {copied === 'copied' ? (
+          <path d="M5 12l5 5L20 7" />
+        ) : copied === 'failed' ? (
+          <path d="M6 6l12 12M18 6L6 18" />
+        ) : (
+          <>
+            <rect x="9" y="9" width="11" height="11" />
+            <path d="M5 15V5h10" />
+          </>
+        )}
+      </svg>
     </Button>
   )
 }
@@ -224,7 +280,9 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
           </Button>
           <Button
             onClick={() => {
+              // The form stays mounted, so clear the code for the next join
               setJoining(false)
+              setCode('')
               setError(false)
             }}
             className="text-sm px-4 py-2"
@@ -436,8 +494,11 @@ function Pong() {
                     <span className="text-xs uppercase tracking-widest text-green-500/70">
                       Room code
                     </span>
-                    <span className="game-menu-glow break-all text-2xl font-bold tracking-widest">
-                      {room}
+                    <span className="flex items-center gap-2">
+                      <span className="game-menu-glow break-all text-2xl font-bold tracking-widest">
+                        {room}
+                      </span>
+                      {room && <CopyCodeButton code={room} />}
                     </span>
                     <span className="text-xs text-green-500/70">
                       Share the link or code with a friend
