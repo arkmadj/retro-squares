@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowButton } from '#/components/common/ArrowButton'
 import { BUTTON_VARIANTS, Button } from '#/components/common/Button'
@@ -28,8 +29,9 @@ const createRoomId = () => crypto.randomUUID().slice(0, 8)
 
 // Accepts a room code or a shared room link
 // Codes are only made in lower case, so capitals typed by a player still match
+// Codes never contain spaces, so a code typed in two halves still matches
 const parseRoomInput = (input: string) => {
-  const text = input.trim().toLowerCase()
+  const text = input.replace(/\s/g, '').toLowerCase()
   if (isRoomId(text)) return text
   try {
     const room = new URL(text, location.origin).searchParams.get('room')
@@ -216,6 +218,7 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
   const [joining, setJoining] = useState(false)
   const [code, setCode] = useState('')
   const [error, setError] = useState(false)
+  const joinButton = useRef<HTMLButtonElement | null>(null)
 
   const join = (event: FormEvent) => {
     event.preventDefault()
@@ -230,6 +233,17 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
     onEnter(room)
   }
 
+  const closeForm = () => {
+    // The form stays mounted, so clear the code for the next join
+    // The lobby buttons render first, so focus can return to Join room
+    flushSync(() => {
+      setJoining(false)
+      setCode('')
+      setError(false)
+    })
+    joinButton.current?.focus()
+  }
+
   return (
     <GameMenu
       open={open}
@@ -240,7 +254,15 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
       }
     >
       {joining ? (
-        <form onSubmit={join} noValidate className="flex flex-col gap-2">
+        <form
+          onSubmit={join}
+          // The menu is a dialog, so Escape leaves the form like Back
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') closeForm()
+          }}
+          noValidate
+          className="flex flex-col gap-2"
+        >
           <label htmlFor="room-code" className="sr-only">
             Room code or link
           </label>
@@ -278,15 +300,7 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
           >
             Join room
           </Button>
-          <Button
-            onClick={() => {
-              // The form stays mounted, so clear the code for the next join
-              setJoining(false)
-              setCode('')
-              setError(false)
-            }}
-            className="text-sm px-4 py-2"
-          >
+          <Button onClick={closeForm} className="text-sm px-4 py-2">
             Back
           </Button>
         </form>
@@ -300,6 +314,7 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
             Create room
           </Button>
           <Button
+            ref={joinButton}
             onClick={() => setJoining(true)}
             className="text-sm px-4 py-2"
           >
