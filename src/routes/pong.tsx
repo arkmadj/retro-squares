@@ -42,9 +42,14 @@ const parseRoomInput = (input: string) => {
 }
 
 export const Route = createFileRoute('/pong')({
-  validateSearch: (search: Record<string, unknown>): PongSearch => ({
-    room: isRoomId(search.room) ? search.room.replace(/[\s-]/g, '').toLowerCase() : undefined,
-  }),
+  // Codes never contain spaces or hyphens, so a code typed in two halves still matches
+  validateSearch: (search: Record<string, unknown>): PongSearch => {
+    const room =
+      typeof search.room === 'string'
+        ? search.room.replace(/[\s-]/g, '').toLowerCase()
+        : search.room
+    return { room: isRoomId(room) ? room : undefined }
+  },
   component: Pong,
 })
 
