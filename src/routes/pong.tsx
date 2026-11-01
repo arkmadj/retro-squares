@@ -29,9 +29,9 @@ const createRoomId = () => crypto.randomUUID().slice(0, 8)
 
 // Accepts a room code or a shared room link
 // Codes are only made in lower case, so capitals typed by a player still match
-// Codes never contain spaces, so a code typed in two halves still matches
+// Codes never contain spaces or hyphens, so a code typed in two halves still matches
 const parseRoomInput = (input: string) => {
-  const text = input.replace(/\s/g, '').toLowerCase()
+  const text = input.replace(/[\s-]/g, '').toLowerCase()
   if (isRoomId(text)) return text
   try {
     const room = new URL(text, location.origin).searchParams.get('room')
