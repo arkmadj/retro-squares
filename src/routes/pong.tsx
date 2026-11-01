@@ -43,7 +43,7 @@ const parseRoomInput = (input: string) => {
 
 export const Route = createFileRoute('/pong')({
   validateSearch: (search: Record<string, unknown>): PongSearch => ({
-    room: isRoomId(search.room) ? search.room : undefined,
+    room: isRoomId(search.room) ? search.room.toLowerCase() : undefined,
   }),
   component: Pong,
 })
