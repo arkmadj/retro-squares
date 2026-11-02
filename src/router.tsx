@@ -1,4 +1,7 @@
-import { createRouter as createTanStackRouter } from '@tanstack/react-router'
+import {
+  createRouter as createTanStackRouter,
+  stringifySearchWith,
+} from '@tanstack/react-router'
 import { routeTree } from './routeTree.gen'
 
 export function getRouter() {
@@ -7,6 +10,9 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
+    // Read link values as plain text, so a room code like 12345678 isn't turned into a number
+    parseSearch: (search) => Object.fromEntries(new URLSearchParams(search)),
+    stringifySearch: stringifySearchWith(JSON.stringify),
   })
 
   return router
