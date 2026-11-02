@@ -1,6 +1,12 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import {
+  HeadContent,
+  Link,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { BUTTON_VARIANTS } from '#/components/common/Button'
 
 import appCss from '../styles.css?url'
 
@@ -31,7 +37,22 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
+  // The page is black, so the router's default black message can't be seen
+  notFoundComponent: NotFound,
 })
+
+function NotFound() {
+  return (
+    <main className="min-h-svh flex flex-col items-center justify-center gap-4 p-4 text-center font-mono text-green-500">
+      <h1 className="text-2xl font-bold uppercase tracking-widest">
+        Page not found
+      </h1>
+      <Link to="/" className={`text-sm px-4 py-2 ${BUTTON_VARIANTS.secondary}`}>
+        Home
+      </Link>
+    </main>
+  )
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
