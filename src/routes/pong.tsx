@@ -34,7 +34,10 @@ const parseRoomInput = (input: string) => {
   const text = input.replace(/[\s-]/g, '').toLowerCase()
   if (isRoomId(text)) return text
   try {
-    const room = new URL(text, location.origin).searchParams.get('room')
+    // A link's code is still encoded, so its spaces only appear once it is read
+    const room = new URL(text, location.origin).searchParams
+      .get('room')
+      ?.replace(/[\s-]/g, '')
     return isRoomId(room) ? room : undefined
   } catch {
     return undefined
