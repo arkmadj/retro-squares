@@ -32,19 +32,8 @@ const setCrtOn = (on: boolean) => {
 const useCrtOn = () => useSyncExternalStore(subscribe, isCrtOn, () => true)
 
 export function CrtToggle() {
-  const on = useCrtOn()
-
   return (
-    <Button
-      role="switch"
-      aria-checked={on}
-      aria-label="CRT effect"
-      title="CRT effect"
-      onClick={() => setCrtOn(!on)}
-      className="crt-toggle fixed right-2 top-2 z-40 bg-black px-2 py-1 text-xs uppercase tracking-widest"
-    >
-      CRT {on ? 'on' : 'off'}
-    </Button>
+    <CrtIconToggle className="crt-toggle fixed right-2 top-2 z-40 bg-black" />
   )
 }
 

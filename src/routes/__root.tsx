@@ -8,6 +8,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { BUTTON_VARIANTS } from '#/components/common/Button'
 import { CRT_INIT_SCRIPT, CrtToggle } from '#/components/CrtToggle'
+import { THEME_INIT_SCRIPT, ThemeToggle } from '#/components/ThemeToggle'
 
 import appCss from '../styles.css?url'
 
@@ -38,7 +39,7 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
-  // The page is black, so the router's default black message can't be seen
+  // The page can be black, so the router's default black message might not be seen
   notFoundComponent: NotFound,
 })
 
@@ -57,14 +58,16 @@ function NotFound() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    // The CRT script can set an attribute here before React hydrates
+    // The CRT and theme scripts can set attributes here before React hydrates
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
         <script dangerouslySetInnerHTML={{ __html: CRT_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
         {children}
+        <ThemeToggle />
         <CrtToggle />
         <TanStackDevtools
           config={{

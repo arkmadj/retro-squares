@@ -10,13 +10,53 @@ body,
   min-height: 100%;
 }
 
+/* The backdrop's colours, which the light and green themes replace */
+:root {
+  /* Resolved here, because the green theme remaps the Tailwind green below */
+  --primary: var(--color-green-500);
+  --accent-rgb: 34 197 94;
+  --vignette: black;
+  --scanline: rgb(0 0 0 / 0.25);
+}
+
+/* Dark sets no attribute, so these rules cover the light and green themes.
+   Throughout the app, the black utilities are the page colour and green-500 is the
+   foreground, so remapping those two themes every page and hover state. */
+[data-theme] body {
+  --vignette: rgb(var(--accent-rgb) / 0.12);
+  --scanline: rgb(0 0 0 / 0.05);
+  color-scheme: light;
+}
+
+[data-theme='light'] body {
+  --color-black: white;
+}
+
+[data-theme='green'] body {
+  --color-black: var(--primary);
+  --color-green-500: black;
+  --accent-rgb: 0 0 0;
+  /* The primary button's hover fill, and error text that stays readable on the green */
+  --color-green-400: #262626;
+  --color-red-500: #7f1d1d;
+}
+
+/* A glow has nothing to light up on a bright page */
+[data-theme] :is(.home-glow, .game-menu-glow) {
+  text-shadow: none;
+}
+
+[data-theme] :is(.home-card, .game-menu-panel) {
+  box-shadow: 0 2px 12px rgb(var(--accent-rgb) / 0.15);
+}
+
 /* CRT backdrop on every page: board grid and vignette behind the content, scanlines over it */
 body {
   margin: 0;
-  background-color: black;
+  background-color: var(--color-black);
   background-image:
-    linear-gradient(rgb(34 197 94 / 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(34 197 94 / 0.06) 1px, transparent 1px);
+    linear-gradient(rgb(var(--accent-rgb) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--accent-rgb) / 0.06) 1px, transparent 1px);
   background-size: 2rem 2rem;
   background-position: center;
 }
@@ -31,7 +71,11 @@ body::after {
 
 body::before {
   z-index: -1;
-  background: radial-gradient(ellipse at center, transparent 40%, black 100%);
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    var(--vignette) 100%
+  );
 }
 
 /* Above the game menus, which are z-10 */
@@ -40,7 +84,7 @@ body::after {
   background: repeating-linear-gradient(
     to bottom,
     transparent 0 2px,
-    rgb(0 0 0 / 0.25) 2px 3px
+    var(--scanline) 2px 3px
   );
 }
 
@@ -57,16 +101,16 @@ body::after {
   animation: none;
 }
 
-/* The board reaches the top corner on phones, so the switch stays on the other pages */
+/* The board reaches the top corners on phones, so the toggles stay on the other pages */
 @media (pointer: coarse) and (width < 48rem) {
-  body:has(.game-screen) .crt-toggle {
+  body:has(.game-screen) :is(.crt-toggle, .theme-toggle) {
     display: none;
   }
 }
 
 /* Opaque so the page grid doesn't show through the board's own grid */
 .game-screen {
-  background: black;
+  background: var(--color-black);
   aspect-ratio: 1 / 2;
   width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 4.5rem) / 2));
 }
@@ -169,8 +213,8 @@ body::after {
 
 .home-glow {
   text-shadow:
-    0 0 4px rgb(34 197 94 / 0.8),
-    0 0 16px rgb(34 197 94 / 0.5);
+    0 0 4px rgb(var(--accent-rgb) / 0.8),
+    0 0 16px rgb(var(--accent-rgb) / 0.5);
 }
 
 .home-flicker {
@@ -189,8 +233,8 @@ body::after {
 
 .home-card {
   box-shadow:
-    0 0 12px rgb(34 197 94 / 0.35),
-    inset 0 0 12px rgb(34 197 94 / 0.15);
+    0 0 12px rgb(var(--accent-rgb) / 0.35),
+    inset 0 0 12px rgb(var(--accent-rgb) / 0.15);
 }
 
 /* Pong demo: the ball bounces between the bats, which track it across */
@@ -198,8 +242,8 @@ body::after {
   --ball-size: 0.5rem;
   --bat-height: 0.375rem;
   background-image:
-    linear-gradient(rgb(34 197 94 / 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(34 197 94 / 0.15) 1px, transparent 1px);
+    linear-gradient(rgb(var(--accent-rgb) / 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--accent-rgb) / 0.15) 1px, transparent 1px);
   background-size: 1rem 1rem;
 }
 
@@ -208,8 +252,8 @@ body::after {
   position: absolute;
   translate: -50% 0;
   border-radius: 9999px;
-  background: rgb(34 197 94);
-  box-shadow: 0 0 6px rgb(34 197 94);
+  background: rgb(var(--accent-rgb));
+  box-shadow: 0 0 6px rgb(var(--accent-rgb));
   animation: home-pong-x 3.4s linear infinite alternate;
 }
 
@@ -247,10 +291,11 @@ body::after {
   }
 }
 
+/* Matches bg-green-500's colour space: Chromium paints filled cells red going from rgb to oklch */
 @keyframes home-logo-cell {
   0% {
-    background-color: rgb(34 197 94);
-    box-shadow: 0 0 8px rgb(34 197 94);
+    background-color: var(--color-green-500);
+    box-shadow: 0 0 8px rgb(var(--accent-rgb));
   }
   40% {
     box-shadow: none;
