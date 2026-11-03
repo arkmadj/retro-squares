@@ -1,5 +1,6 @@
 import { Children, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { CrtIconToggle } from '#/components/CrtToggle'
 
 type GameMenuContent = {
   title?: string
@@ -62,7 +63,7 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
       style={{ '--menu-items': hasChildren ? 3 : 2 } as CSSProperties}
       className="game-menu absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4 text-center font-mono text-green-500"
     >
-      <div className="game-menu-panel flex w-full flex-col items-center gap-4 bg-black/90 px-4 py-6 outline outline-green-500">
+      <div className="game-menu-panel relative flex w-full flex-col items-center gap-4 bg-black/90 px-4 py-6 outline outline-green-500">
         <h2
           style={itemStyle(0)}
           className="game-menu-item game-menu-glow text-2xl font-bold uppercase tracking-widest"
@@ -84,6 +85,8 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
             {children}
           </div>
         )}
+        {/* Phones hide the page's CRT switch on the game screen */}
+        <CrtIconToggle className="absolute right-1 top-1 hidden max-md:pointer-coarse:block" />
       </div>
     </div>
   )

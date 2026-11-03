@@ -10,12 +10,63 @@ body,
   min-height: 100%;
 }
 
+/* CRT backdrop on every page: board grid and vignette behind the content, scanlines over it */
 body {
   margin: 0;
-  background: black;
+  background-color: black;
+  background-image:
+    linear-gradient(rgb(34 197 94 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 197 94 / 0.06) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+  background-position: center;
 }
 
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  z-index: -1;
+  background: radial-gradient(ellipse at center, transparent 40%, black 100%);
+}
+
+/* Above the game menus, which are z-10 */
+body::after {
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgb(0 0 0 / 0.25) 2px 3px
+  );
+}
+
+[data-crt='off'] body {
+  background-image: none;
+}
+
+[data-crt='off'] body::before,
+[data-crt='off'] body::after {
+  content: none;
+}
+
+[data-crt='off'] .home-flicker {
+  animation: none;
+}
+
+/* The board reaches the top corner on phones, so the switch stays on the other pages */
+@media (pointer: coarse) and (width < 48rem) {
+  body:has(.game-screen) .crt-toggle {
+    display: none;
+  }
+}
+
+/* Opaque so the page grid doesn't show through the board's own grid */
 .game-screen {
+  background: black;
   aspect-ratio: 1 / 2;
   width: min(calc(100dvw - 2rem), 24rem, calc((100dvh - 4.5rem) / 2));
 }
@@ -110,39 +161,6 @@ body {
   .game-menu[data-state='closed'] {
     animation-delay: 0ms;
   }
-}
-
-/* Homepage: CRT backdrop, board grid and vignette behind the content */
-.home-crt {
-  position: relative;
-  isolation: isolate;
-  background-image:
-    linear-gradient(rgb(34 197 94 / 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(34 197 94 / 0.06) 1px, transparent 1px);
-  background-size: 2rem 2rem;
-  background-position: center;
-}
-
-.home-crt::before,
-.home-crt::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-}
-
-.home-crt::before {
-  z-index: -1;
-  background: radial-gradient(ellipse at center, transparent 40%, black 100%);
-}
-
-.home-crt::after {
-  z-index: 10;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 2px,
-    rgb(0 0 0 / 0.25) 2px 3px
-  );
 }
 
 .home-enter {

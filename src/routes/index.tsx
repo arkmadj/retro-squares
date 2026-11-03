@@ -6,7 +6,7 @@ export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
   return (
-    <main className="home-crt min-h-svh flex flex-col items-center justify-center gap-10 p-4 text-center font-mono text-green-500">
+    <main className="min-h-svh flex flex-col items-center justify-center gap-10 p-4 text-center font-mono text-green-500">
       <header
         className="home-enter flex flex-col items-center gap-3"
         style={{ '--enter-index': 0 } as CSSProperties}
