@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Button } from '#/components/common/Button'
+import { playClick } from '#/components/SoundToggle'
 
 const THEMES = ['dark', 'light', 'green'] as const
 type Theme = (typeof THEMES)[number]
@@ -121,7 +122,10 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
         aria-haspopup="menu"
         aria-expanded={open}
         title="Theme"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          playClick()
+          setOpen(!open)
+        }}
         className="block bg-black p-1.5"
       >
         <ThemeIcon theme={theme} />
@@ -141,6 +145,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
               role="menuitemradio"
               aria-checked={option === theme}
               onClick={() => {
+                playClick()
                 setTheme(option)
                 close()
               }}

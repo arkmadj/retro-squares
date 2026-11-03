@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Button } from '#/components/common/Button'
+import { playClick } from '#/components/SoundToggle'
 
 const STORAGE_KEY = 'crt'
 
@@ -46,7 +47,10 @@ export function CrtIconToggle({ className = '' }: { className?: string }) {
       aria-checked={on}
       aria-label="CRT effect"
       title="CRT effect"
-      onClick={() => setCrtOn(!on)}
+      onClick={() => {
+        playClick()
+        setCrtOn(!on)
+      }}
       className={`p-1.5 ${className}`}
     >
       <svg

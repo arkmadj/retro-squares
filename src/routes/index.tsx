@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import type { CSSProperties } from 'react'
+import { SoundToggle, playBounce, playStart } from '#/components/SoundToggle'
 import { WIN_SCORE } from '#/server/updates'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -7,6 +8,8 @@ export const Route = createFileRoute('/')({ component: Home })
 function Home() {
   return (
     <main className="min-h-svh flex flex-col items-center justify-center gap-10 p-4 text-center font-mono text-green-500">
+      {/* Beside the CRT toggle */}
+      <SoundToggle className="fixed right-12 top-2 z-40 bg-black" />
       <header
         className="home-enter flex flex-col items-center gap-3"
         style={{ '--enter-index': 0 } as CSSProperties}
@@ -44,7 +47,13 @@ function Home() {
           className="home-pong relative h-24 w-full outline outline-green-500/40"
         >
           <span className="home-pong-bat top-0" />
-          <span className="home-pong-ball" />
+          {/* Each home-pong-y cycle ends with the ball at a bat */}
+          <span
+            className="home-pong-ball"
+            onAnimationIteration={(event) => {
+              if (event.animationName === 'home-pong-y') playBounce()
+            }}
+          />
           <span className="home-pong-bat bottom-0" />
         </div>
         <p className="text-sm">
@@ -52,6 +61,7 @@ function Home() {
         </p>
         <Link
           to="/pong"
+          onClick={playStart}
           className="px-6 py-2 uppercase tracking-widest outline outline-green-500 hover:bg-green-500 hover:text-black active:bg-green-500 active:text-black"
         >
           <span aria-hidden="true" className="home-blink mr-2">
