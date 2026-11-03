@@ -9,6 +9,48 @@ const START_NOTE_SECONDS = 0.07
 const CLICK_HZ = 880
 const CLICK_SECONDS = 0.03
 
+const MUSIC_VOLUME = 0.6
+const MUSIC_STEPS_PER_BAR = 8
+const MUSIC_BASS_EVERY_STEPS = 4
+// Notes are queued ahead of time, because timers are too uneven to play them on the beat
+const MUSIC_LOOKAHEAD_SECONDS = 0.2
+const MUSIC_TICK_MS = 50
+
+// Notes are MIDI numbers, with one bar per line. Null is a rest. The bass has one note a bar.
+type Tune = {
+  stepSeconds: number
+  lead: (number | null)[]
+  bass: number[]
+}
+
+// Over the chords Am, F, C and G
+export const HOME_TUNE: Tune = {
+  stepSeconds: 0.25,
+  // prettier-ignore
+  lead: [
+    69, 72, 76, null, 81, 76, 72, 76,
+    69, 72, 77, null, 81, 77, 72, 77,
+    67, 72, 76, null, 79, 76, 72, 76,
+    67, 71, 74, null, 79, 74, 71, 74,
+  ],
+  bass: [57, 53, 60, 55],
+}
+
+// Faster and lower for the game, over the chords Em, C, G and D
+export const PONG_TUNE: Tune = {
+  stepSeconds: 0.18,
+  // prettier-ignore
+  lead: [
+    64, 67, 71, 76, 71, 67, null, 67,
+    64, 67, 72, 76, 72, 67, null, 67,
+    62, 67, 71, 74, 71, 67, null, 67,
+    62, 66, 69, 74, 69, 66, null, 66,
+  ],
+  bass: [52, 48, 55, 50],
+}
+
+const midiToHz = (note: number) => 440 * 2 ** ((note - 69) / 12)
+
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -56,17 +98,21 @@ const playTone = (
   frequency: number,
   delay: number,
   duration: number,
+  {
+    type = 'square',
+    output = context.destination,
+  }: { type?: OscillatorType; output?: AudioNode } = {},
 ) => {
   const start = context.currentTime + delay
   const oscillator = new OscillatorNode(context, {
-    type: 'square',
+    type,
     frequency,
   })
   const gain = new GainNode(context, { gain: VOLUME })
   // Fading out avoids the click of a wave cut off mid-cycle
   gain.gain.setValueAtTime(VOLUME, start)
   gain.gain.exponentialRampToValueAtTime(0.001, start + duration)
-  oscillator.connect(gain).connect(context.destination)
+  oscillator.connect(gain).connect(output)
   oscillator.start(start)
   oscillator.stop(start + duration)
 }
@@ -97,9 +143,62 @@ export const playClick = () => {
   if (isSoundOn()) playClickTone()
 }
 
+// The server can't see the saved choice, so it always renders the default
+const useSoundOn = () => useSyncExternalStore(subscribe, isSoundOn, () => false)
+
+// Loops while the calling page is mounted and sound is on
+export const useLoopingMusic = (tune: Tune) => {
+  const on = useSoundOn()
+
+  useEffect(() => {
+    if (!on) return
+    let output: GainNode | undefined
+    let step = 0
+    let nextTime = 0
+
+    const queueNotes = () => {
+      // Waits for the first click to start the audio, and rests in a hidden tab
+      if (audio?.state !== 'running' || document.hidden) return
+      if (!output) {
+        output = new GainNode(audio, { gain: MUSIC_VOLUME })
+        output.connect(audio.destination)
+      }
+      // After a wait the tune carries on from here instead of rushing to catch up
+      nextTime = Math.max(nextTime, audio.currentTime)
+
+      while (nextTime < audio.currentTime + MUSIC_LOOKAHEAD_SECONDS) {
+        const delay = nextTime - audio.currentTime
+        const lead = tune.lead[step]
+        if (lead !== null) {
+          playTone(audio, midiToHz(lead), delay, tune.stepSeconds, { output })
+        }
+        if (step % MUSIC_BASS_EVERY_STEPS === 0) {
+          const bar = Math.floor(step / MUSIC_STEPS_PER_BAR)
+          playTone(
+            audio,
+            midiToHz(tune.bass[bar]),
+            delay,
+            tune.stepSeconds * MUSIC_BASS_EVERY_STEPS,
+            { type: 'triangle', output },
+          )
+        }
+        step = (step + 1) % tune.lead.length
+        nextTime += tune.stepSeconds
+      }
+    }
+
+    queueNotes()
+    const timer = setInterval(queueNotes, MUSIC_TICK_MS)
+    return () => {
+      clearInterval(timer)
+      // Cuts off the notes already queued
+      output?.disconnect()
+    }
+  }, [on, tune])
+}
+
 export function SoundToggle({ className = '' }: { className?: string }) {
-  // The server can't see the saved choice, so it always renders the default
-  const on = useSyncExternalStore(subscribe, isSoundOn, () => false)
+  const on = useSoundOn()
 
   // A saved choice has no click to start the audio, so the visitor's next one does
   useEffect(() => {

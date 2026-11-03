@@ -1,6 +1,7 @@
 import { Children, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { CrtIconToggle } from '#/components/CrtToggle'
+import { SoundToggle } from '#/components/SoundToggle'
 import { ThemeToggle } from '#/components/ThemeToggle'
 
 type GameMenuContent = {
@@ -88,6 +89,8 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
         )}
         {/* Phones hide the page's toggles on the game screen */}
         <CrtIconToggle className="absolute right-1 top-1 hidden max-md:pointer-coarse:block" />
+        {/* Below the CRT toggle, because a short phone's panel is too narrow beside the title */}
+        <SoundToggle className="absolute right-1 top-10 hidden max-md:pointer-coarse:block" />
         <ThemeToggle className="absolute left-1 top-1 hidden max-md:pointer-coarse:block" />
       </div>
     </div>

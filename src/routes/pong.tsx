@@ -5,6 +5,7 @@ import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowButton } from '#/components/common/ArrowButton'
 import { BUTTON_VARIANTS, Button } from '#/components/common/Button'
 import { GameMenu } from '#/components/GameMenu'
+import { PONG_TUNE, useLoopingMusic } from '#/components/SoundToggle'
 import {
   mirrorBall,
   receiveBall,
@@ -343,6 +344,8 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
 }
 
 function Pong() {
+  useLoopingMusic(PONG_TUNE)
+
   const { room } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const topBatRef = useRef<HTMLDivElement | null>(null)

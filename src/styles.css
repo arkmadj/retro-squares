@@ -117,7 +117,7 @@ body::after {
 
 /* The board reaches the top corners on phones, so the toggles stay on the other pages */
 @media (pointer: coarse) and (width < 48rem) {
-  body:has(.game-screen) :is(.crt-toggle, .theme-toggle) {
+  body:has(.game-screen) :is(.crt-toggle, .sound-toggle, .theme-toggle) {
     display: none;
   }
 }

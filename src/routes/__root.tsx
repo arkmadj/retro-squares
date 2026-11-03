@@ -8,6 +8,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { BUTTON_VARIANTS } from '#/components/common/Button'
 import { CRT_INIT_SCRIPT, CrtToggle } from '#/components/CrtToggle'
+import { SoundToggle } from '#/components/SoundToggle'
 import { THEME_INIT_SCRIPT, ThemeToggle } from '#/components/ThemeToggle'
 
 import appCss from '../styles.css?url'
@@ -69,6 +70,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         {children}
         <ThemeToggle className="theme-toggle fixed left-2 top-2 z-40" />
         <CrtToggle />
+        <SoundToggle className="sound-toggle fixed right-12 top-2 z-40 bg-black" />
         <TanStackDevtools
           config={{
             position: 'bottom-right',

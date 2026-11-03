@@ -1,15 +1,20 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import type { CSSProperties } from 'react'
-import { SoundToggle, playBounce, playStart } from '#/components/SoundToggle'
+import {
+  HOME_TUNE,
+  playBounce,
+  playStart,
+  useLoopingMusic,
+} from '#/components/SoundToggle'
 import { WIN_SCORE } from '#/server/updates'
 
 export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
+  useLoopingMusic(HOME_TUNE)
+
   return (
     <main className="min-h-svh flex flex-col items-center justify-center gap-10 p-4 text-center font-mono text-green-500">
-      {/* Beside the CRT toggle */}
-      <SoundToggle className="fixed right-12 top-2 z-40 bg-black" />
       <header
         className="home-enter flex flex-col items-center gap-3"
         style={{ '--enter-index': 0 } as CSSProperties}
