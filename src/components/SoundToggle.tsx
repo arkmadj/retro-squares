@@ -7,6 +7,8 @@ const BOUNCE_HZ = 459 // The original Pong's paddle hit
 const BOUNCE_SECONDS = 0.05
 const WALL_HZ = 226 // The original Pong's wall hit
 const WALL_SECONDS = 0.03
+const ARROW_HZ = 330
+const ARROW_SECONDS = 0.02
 const COUNTDOWN_HZ = 440
 const COUNTDOWN_SECONDS = 0.1
 const SERVE_HZ = 880
@@ -145,6 +147,8 @@ const playIfRunning = (frequencies: number[], noteSeconds: number) => {
 export const playBounce = () => playIfRunning([BOUNCE_HZ], BOUNCE_SECONDS)
 
 export const playWall = () => playIfRunning([WALL_HZ], WALL_SECONDS)
+
+export const playArrow = () => playIfRunning([ARROW_HZ], ARROW_SECONDS)
 
 export const playCountdown = () =>
   playIfRunning([COUNTDOWN_HZ], COUNTDOWN_SECONDS)

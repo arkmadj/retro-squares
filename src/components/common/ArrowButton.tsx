@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Button } from '#/components/common/Button'
+import { playArrow } from '#/components/SoundToggle'
 
 type ArrowButtonProps = {
   label: string
@@ -22,6 +23,7 @@ export function ArrowButton({
       style={style}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId)
+        playArrow()
         onPress(true)
       }}
       onPointerUp={() => onPress(false)}
