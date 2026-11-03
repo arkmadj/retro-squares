@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
+import { playBounce, playWall } from '#/components/SoundToggle'
 import type { BallState } from '#/server/messages'
 
 // Position from the centre of the game screen, as fractions of its width and height
@@ -74,18 +75,40 @@ const fold = (value: number, limit: number) => {
   return u < 2 * limit ? u - limit : 3 * limit - u
 }
 
+// Seconds the ball has been moving along this trajectory at `time`
+const elapsedAt = (ball: BallState, time: number) =>
+  Math.max(0, time - ball.t) / 1000
+
+// Ball x at `time` as if there were no side walls
+const unfoldedX = (
+  ball: BallState,
+  time: number,
+  speed: number,
+  { aspect }: Geometry,
+) => ball.x + ball.dx * speed * elapsedAt(ball, time) * aspect
+
 // Ball position at `time`, including bounces off the side walls
 const positionAt = (
   ball: BallState,
   time: number,
   speed: number,
-  { rx, aspect }: Geometry,
-): BallPosition => {
-  const elapsed = Math.max(0, time - ball.t) / 1000
-  return {
-    x: fold(ball.x + ball.dx * speed * elapsed * aspect, 0.5 - rx),
-    y: ball.y + ball.dy * speed * elapsed,
-  }
+  geometry: Geometry,
+): BallPosition => ({
+  x: fold(unfoldedX(ball, time, speed, geometry), 0.5 - geometry.rx),
+  y: ball.y + ball.dy * speed * elapsedAt(ball, time),
+})
+
+// Changes each time the ball bounces off a side wall
+const wallBounces = (
+  ball: BallState,
+  time: number,
+  speed: number,
+  geometry: Geometry,
+) => {
+  const limit = 0.5 - geometry.rx
+  return Math.floor(
+    (unfoldedX(ball, time, speed, geometry) + limit) / (2 * limit),
+  )
 }
 
 // Bounds from the centre of the game screen, as fractions of its width and height
@@ -157,6 +180,7 @@ export const useBallMovement = ({
     // Shared clock time being shown while catching up with a late ball
     let shownAt: number | null = null
     let missed = false
+    let walls = 0
 
     function tick(time: number) {
       frame = requestAnimationFrame(tick)
@@ -237,6 +261,9 @@ export const useBallMovement = ({
       }
 
       if (state !== lastState) {
+        // Every hit raises seq, and an opponent confirming a predicted hit keeps it
+        if (lastState !== null && state.seq > lastState.seq) playBounce()
+        walls = wallBounces(state, t, speed, geometry)
         const offset = {
           x: displayed.x - position.x,
           y: displayed.y - position.y,
@@ -252,6 +279,13 @@ export const useBallMovement = ({
             ? state.t
             : null
         lastState = state
+      }
+
+      const bounces = wallBounces(state, t, speed, geometry)
+      if (bounces !== walls) {
+        walls = bounces
+        // A ball past a bat keeps moving off screen, where it shouldn't be heard
+        if (Math.abs(position.y) <= 0.5) playWall()
       }
 
       // Hits and misses still use the real position, so both players agree

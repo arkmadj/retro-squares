@@ -4,6 +4,19 @@ import { Button } from '#/components/common/Button'
 const STORAGE_KEY = 'sound'
 const VOLUME = 0.04
 const BOUNCE_HZ = 459 // The original Pong's paddle hit
+const BOUNCE_SECONDS = 0.05
+const WALL_HZ = 226 // The original Pong's wall hit
+const WALL_SECONDS = 0.03
+const COUNTDOWN_HZ = 440
+const COUNTDOWN_SECONDS = 0.1
+const SERVE_HZ = 880
+const SERVE_SECONDS = 0.2
+const POINT_WON_HZ = [659, 880]
+const POINT_LOST_HZ = [440, 330]
+const POINT_NOTE_SECONDS = 0.1
+const GAME_WON_HZ = [523, 659, 784, 1047]
+const GAME_LOST_HZ = [392, 330, 262, 196]
+const GAME_OVER_NOTE_SECONDS = 0.15
 const START_HZ = [440, 587, 880]
 const START_NOTE_SECONDS = 0.07
 const CLICK_HZ = 880
@@ -119,12 +132,30 @@ const playTone = (
   oscillator.stop(start + duration)
 }
 
-// A suspended context would queue these up and play them all at once on the first click
-export const playBounce = () => {
-  if (isSoundOn() && audio?.state === 'running') {
-    playTone(audio, BOUNCE_HZ, 0, 0.05)
-  }
+// For sounds without a click to start the audio. A suspended context would queue
+// them up and play them all at once on the first click.
+const playIfRunning = (frequencies: number[], noteSeconds: number) => {
+  const context = audio
+  if (!isSoundOn() || context?.state !== 'running') return
+  frequencies.forEach((frequency, i) => {
+    playTone(context, frequency, i * noteSeconds, noteSeconds)
+  })
 }
+
+export const playBounce = () => playIfRunning([BOUNCE_HZ], BOUNCE_SECONDS)
+
+export const playWall = () => playIfRunning([WALL_HZ], WALL_SECONDS)
+
+export const playCountdown = () =>
+  playIfRunning([COUNTDOWN_HZ], COUNTDOWN_SECONDS)
+
+export const playServe = () => playIfRunning([SERVE_HZ], SERVE_SECONDS)
+
+export const playPoint = (won: boolean) =>
+  playIfRunning(won ? POINT_WON_HZ : POINT_LOST_HZ, POINT_NOTE_SECONDS)
+
+export const playGameOver = (won: boolean) =>
+  playIfRunning(won ? GAME_WON_HZ : GAME_LOST_HZ, GAME_OVER_NOTE_SECONDS)
 
 export const playStart = () => {
   if (!isSoundOn()) return

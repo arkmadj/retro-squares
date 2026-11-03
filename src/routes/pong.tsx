@@ -5,7 +5,15 @@ import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowButton } from '#/components/common/ArrowButton'
 import { BUTTON_VARIANTS, Button } from '#/components/common/Button'
 import { GameMenu } from '#/components/GameMenu'
-import { PONG_TUNE, playType, useLoopingMusic } from '#/components/SoundToggle'
+import {
+  PONG_TUNE,
+  playCountdown,
+  playGameOver,
+  playPoint,
+  playServe,
+  playType,
+  useLoopingMusic,
+} from '#/components/SoundToggle'
 import {
   mirrorBall,
   receiveBall,
@@ -15,7 +23,7 @@ import type { LocalBallState } from '#/hooks/useBallMovement'
 import { useBatControls, useRemoteBat } from '#/hooks/useBatControls'
 import { useGameRoom } from '#/hooks/useGameRoom'
 import type { RoomStatus } from '#/hooks/useGameRoom'
-import type { BallState, BatState, Direction } from '#/server/messages'
+import type { BallState, BatState, Direction, Score } from '#/server/messages'
 import { COUNTDOWN, WIN_SCORE } from '#/server/updates'
 
 type PongSearch = { room?: string }
@@ -95,6 +103,28 @@ const useCountdown = (
   }, [serve, active, now])
 
   return active && serve ? count : 0
+}
+
+const useGameSounds = (status: RoomStatus, score: Score, countdown: number) => {
+  const previous = useRef({ status, score, countdown })
+
+  useEffect(() => {
+    const before = previous.current
+    previous.current = { status, score, countdown }
+
+    if (status === 'playing' && countdown !== before.countdown) {
+      if (countdown > 0) playCountdown()
+      else playServe()
+    }
+
+    // A point ends the round, which tells it apart from a reconnect restoring the score
+    if (before.status === 'playing' && status === 'paired') {
+      const won = score.self > before.score.self
+      if (!won && score.opponent <= before.score.opponent) return
+      if (Math.max(score.self, score.opponent) >= WIN_SCORE) playGameOver(won)
+      else playPoint(won)
+    }
+  }, [status, score, countdown])
 }
 
 // Milliseconds the copy result stays on the button
@@ -415,6 +445,7 @@ function Pong() {
   })
 
   const countdown = useCountdown(serve, status === 'playing', now)
+  useGameSounds(status, score, countdown)
   const winner =
     score.self >= WIN_SCORE
       ? 'self'
