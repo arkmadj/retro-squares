@@ -633,7 +633,11 @@ function Pong() {
         </section>
       </div>
       <div className="hidden pointer-coarse:flex justify-between gap-2 game-width">
-        <ArrowButton label="Move left" onPress={moveLeft}>
+        <ArrowButton
+          label="Move left"
+          onPress={moveLeft}
+          disabled={status !== 'playing'}
+        >
           ←
         </ArrowButton>
         {/* No menu is open during play, so this is the way out on phones */}
@@ -644,7 +648,11 @@ function Pong() {
             className="hidden min-w-0 self-center py-1 max-md:block"
           />
         )}
-        <ArrowButton label="Move right" onPress={moveRight}>
+        <ArrowButton
+          label="Move right"
+          onPress={moveRight}
+          disabled={status !== 'playing'}
+        >
           →
         </ArrowButton>
       </div>

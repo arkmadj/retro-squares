@@ -5,6 +5,7 @@ import { playArrow } from '#/components/SoundToggle'
 type ArrowButtonProps = {
   label: string
   onPress: (active: boolean) => void
+  disabled?: boolean
   children: ReactNode
   className?: string
   style?: CSSProperties
@@ -13,6 +14,7 @@ type ArrowButtonProps = {
 export function ArrowButton({
   label,
   onPress,
+  disabled = false,
   children,
   className = '',
   style,
@@ -20,6 +22,7 @@ export function ArrowButton({
   return (
     <Button
       aria-label={label}
+      disabled={disabled}
       style={style}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -30,7 +33,7 @@ export function ArrowButton({
       onPointerCancel={() => onPress(false)}
       onLostPointerCapture={() => onPress(false)}
       onContextMenu={(event) => event.preventDefault()}
-      className={`size-16 text-3xl max-md:size-12 max-md:text-2xl shrink-0 select-none touch-none ${className}`}
+      className={`size-16 text-3xl max-md:size-12 max-md:text-2xl shrink-0 select-none touch-none disabled:opacity-50 disabled:pointer-events-none ${className}`}
     >
       {children}
     </Button>
