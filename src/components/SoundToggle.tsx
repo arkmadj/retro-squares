@@ -8,6 +8,8 @@ const START_HZ = [440, 587, 880]
 const START_NOTE_SECONDS = 0.07
 const CLICK_HZ = 880
 const CLICK_SECONDS = 0.03
+const TYPE_HZ = 1320
+const TYPE_SECONDS = 0.015
 
 const MUSIC_VOLUME = 0.6
 const MUSIC_STEPS_PER_BAR = 8
@@ -141,6 +143,13 @@ const playClickTone = () => {
 
 export const playClick = () => {
   if (isSoundOn()) playClickTone()
+}
+
+export const playType = () => {
+  if (!isSoundOn()) return
+  void unlockAudio().then((context) => {
+    playTone(context, TYPE_HZ, 0, TYPE_SECONDS)
+  })
 }
 
 // The server can't see the saved choice, so it always renders the default

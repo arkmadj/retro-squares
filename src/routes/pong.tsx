@@ -5,7 +5,7 @@ import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowButton } from '#/components/common/ArrowButton'
 import { BUTTON_VARIANTS, Button } from '#/components/common/Button'
 import { GameMenu } from '#/components/GameMenu'
-import { PONG_TUNE, useLoopingMusic } from '#/components/SoundToggle'
+import { PONG_TUNE, playType, useLoopingMusic } from '#/components/SoundToggle'
 import {
   mirrorBall,
   receiveBall,
@@ -289,6 +289,7 @@ function LobbyMenu({ open, onEnter }: LobbyMenuProps) {
             aria-invalid={error}
             aria-describedby={error ? 'room-code-error' : undefined}
             onChange={(event) => {
+              playType()
               setCode(event.target.value)
               setError(false)
             }}

@@ -1,7 +1,7 @@
 import { Children, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { CrtIconToggle } from '#/components/CrtToggle'
-import { SoundToggle } from '#/components/SoundToggle'
+import { SoundToggle, playClick } from '#/components/SoundToggle'
 import { ThemeToggle } from '#/components/ThemeToggle'
 
 type GameMenuContent = {
@@ -34,6 +34,11 @@ function WaitingIcon() {
 
 const itemStyle = (index: number) =>
   ({ '--menu-index': index }) as CSSProperties
+
+// Set on the menu's content, because its toggles already play their own click
+const playContentClick = (event: MouseEvent) => {
+  if ((event.target as Element).closest('a, button')) playClick()
+}
 
 export function GameMenu({ open = true, ...content }: GameMenuProps) {
   const [mounted, setMounted] = useState(open)
@@ -74,6 +79,7 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
         </h2>
         <div
           style={itemStyle(1)}
+          onClick={playContentClick}
           className="game-menu-item flex flex-col items-center gap-2 text-sm"
         >
           {message}
@@ -82,6 +88,7 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
         {hasChildren && (
           <div
             style={itemStyle(2)}
+            onClick={playContentClick}
             className="game-menu-item flex w-full flex-col items-stretch gap-2"
           >
             {children}
