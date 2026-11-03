@@ -28,7 +28,7 @@ export function ArrowButton({
       onPointerCancel={() => onPress(false)}
       onLostPointerCapture={() => onPress(false)}
       onContextMenu={(event) => event.preventDefault()}
-      className={`size-16 text-3xl select-none touch-none ${className}`}
+      className={`size-16 text-3xl max-md:size-12 max-md:text-2xl shrink-0 select-none touch-none ${className}`}
     >
       {children}
     </Button>

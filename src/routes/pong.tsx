@@ -427,8 +427,9 @@ function Pong() {
 
   return (
     <main className="h-svh flex flex-col items-center justify-center gap-2 max-md:py-2">
-      <div className="my-auto flex flex-col gap-2">
-        <header className="game-width flex h-8 items-center justify-between gap-2 font-mono text-sm text-green-500">
+      <div className="my-auto flex flex-col gap-2 max-md:pointer-coarse:my-0">
+        {/* Phones hide this row: the menus repeat it, and Leave moves beside the arrows */}
+        <header className="game-width flex h-8 items-center justify-between gap-2 font-mono text-sm text-green-500 max-md:pointer-coarse:hidden">
           {inRoom ? (
             <>
               <LeaveButton
@@ -596,10 +597,18 @@ function Pong() {
           </GameMenu>
         </section>
       </div>
-      <div className="hidden pointer-coarse:flex justify-between game-width">
+      <div className="hidden pointer-coarse:flex justify-between gap-2 game-width">
         <ArrowButton label="Move left" onPress={moveLeft}>
           ←
         </ArrowButton>
+        {/* No menu is open during play, so this is the way out on phones */}
+        {status === 'playing' && (
+          <LeaveButton
+            confirm={confirmLeave}
+            onLeave={leaveRoom}
+            className="hidden min-w-0 self-center py-1 max-md:block"
+          />
+        )}
         <ArrowButton label="Move right" onPress={moveRight}>
           →
         </ArrowButton>

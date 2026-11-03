@@ -31,6 +31,13 @@ body {
   }
 }
 
+/* Phones only: sized from svh like the page, so the board fits when the address bar shows */
+@media (pointer: coarse) and (width < 48rem) {
+  .game-screen {
+    width: min(calc(100dvw - 2rem), 24rem, calc((100svh - 4.5rem) / 2));
+  }
+}
+
 /* Items enter top to bottom after the backdrop, and leave bottom to top before it */
 .game-menu {
   --menu-duration: 250ms;
