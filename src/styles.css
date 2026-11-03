@@ -50,6 +50,20 @@ body,
   box-shadow: 0 2px 12px rgb(var(--accent-rgb) / 0.15);
 }
 
+/* Solid black pieces on the green board: the score isn't faded, the menu doesn't tint the
+   board over them, and its panel is opaque so the ball stays hidden behind it */
+[data-theme='green'] .game-score {
+  color: black;
+}
+
+[data-theme='green'] .game-menu {
+  background: transparent;
+}
+
+[data-theme='green'] .game-menu-panel {
+  background: var(--color-black);
+}
+
 /* CRT backdrop on every page: board grid and vignette behind the content, scanlines over it */
 body {
   margin: 0;

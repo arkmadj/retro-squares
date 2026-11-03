@@ -488,7 +488,7 @@ function Pong() {
           />
           <div
             aria-label={`Score: you ${score.self}, opponent ${score.opponent}`}
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4 font-mono text-2xl font-bold text-green-500/60"
+            className="game-score pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4 font-mono text-2xl font-bold text-green-500/60"
           >
             <span>{score.opponent}</span>
             <span>{score.self}</span>
