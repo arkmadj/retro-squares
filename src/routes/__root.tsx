@@ -67,7 +67,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <ThemeToggle />
+        <ThemeToggle className="theme-toggle fixed left-2 top-2 z-40" />
         <CrtToggle />
         <TanStackDevtools
           config={{

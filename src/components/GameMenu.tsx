@@ -1,6 +1,7 @@
 import { Children, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { CrtIconToggle } from '#/components/CrtToggle'
+import { ThemeToggle } from '#/components/ThemeToggle'
 
 type GameMenuContent = {
   title?: string
@@ -85,8 +86,9 @@ export function GameMenu({ open = true, ...content }: GameMenuProps) {
             {children}
           </div>
         )}
-        {/* Phones hide the page's CRT switch on the game screen */}
+        {/* Phones hide the page's toggles on the game screen */}
         <CrtIconToggle className="absolute right-1 top-1 hidden max-md:pointer-coarse:block" />
+        <ThemeToggle className="absolute left-1 top-1 hidden max-md:pointer-coarse:block" />
       </div>
     </div>
   )

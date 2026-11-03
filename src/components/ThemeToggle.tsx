@@ -65,7 +65,7 @@ function ThemeIcon({ theme }: { theme: Theme }) {
   )
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ className = '' }: { className?: string }) {
   // The server can't see the saved choice, so it always renders the default
   const theme = useSyncExternalStore(subscribe, getTheme, () => 'dark' as const)
   const [open, setOpen] = useState(false)
@@ -114,7 +114,7 @@ export function ThemeToggle() {
   }
 
   return (
-    <div ref={rootRef} className="fixed left-2 top-2 z-40">
+    <div ref={rootRef} className={className}>
       <Button
         ref={triggerRef}
         aria-label={`Theme: ${theme}`}
@@ -122,7 +122,7 @@ export function ThemeToggle() {
         aria-expanded={open}
         title="Theme"
         onClick={() => setOpen(!open)}
-        className="theme-toggle block bg-black p-1.5"
+        className="block bg-black p-1.5"
       >
         <ThemeIcon theme={theme} />
       </Button>
