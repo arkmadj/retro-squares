@@ -105,7 +105,14 @@ let audio: AudioContext | undefined
 
 // Browsers only start audio during a click or key press, so call this from one
 const unlockAudio = async () => {
-  audio ??= new AudioContext()
+  if (!audio) {
+    // By default iPhones mute this audio when the ring/silent switch is on silent
+    const { audioSession } = navigator as Navigator & {
+      audioSession?: { type: string } // Only in Safari, and not in TypeScript's types
+    }
+    if (audioSession) audioSession.type = 'playback'
+    audio = new AudioContext()
+  }
   await audio.resume()
   return audio
 }
@@ -248,11 +255,11 @@ export function SoundToggle({ className = '' }: { className?: string }) {
   useEffect(() => {
     if (!on) return
     const unlock = () => void unlockAudio()
-    window.addEventListener('click', unlock)
-    window.addEventListener('keydown', unlock)
+    // iOS Safari only sends click here from buttons and links, so taps elsewhere need touchend
+    const events = ['click', 'keydown', 'touchend']
+    events.forEach((name) => window.addEventListener(name, unlock))
     return () => {
-      window.removeEventListener('click', unlock)
-      window.removeEventListener('keydown', unlock)
+      events.forEach((name) => window.removeEventListener(name, unlock))
     }
   }, [on])
 
