@@ -10,6 +10,17 @@ body,
   min-height: 100%;
 }
 
+/* iOS Safari zooms into any focused field under 16px. On touch screens every field
+   gets 16px, which stops the zoom without disabling pinch-zoom. Unlayered, so it
+   wins over Tailwind's text-sm and similar utilities. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* The backdrop's colours, which the light and green themes replace */
 :root {
   /* Resolved here, because the green theme remaps the Tailwind green below */
